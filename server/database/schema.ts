@@ -104,10 +104,33 @@ export const initialCapital = pgTable('initial_capital', {
   check('initial_capital_rate_positive', sql`${table.usdTomanRate} > 0`),
 ])
 
+/**
+ * One current quote per asset. The portfolio reads this table and does not
+ * call a market API. source is "manual" from the current route. A later
+ * provider can upsert the same row. The rate here converts the current price
+ * to Toman and must not be copied onto past entries.
+ */
+export const assetQuotes = pgTable('asset_quotes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  assetId: uuid('asset_id').notNull().references(() => assets.id, { onDelete: 'cascade' }).unique(),
+  priceUsd: numeric('price_usd', { precision: 38, scale: 12 }).notNull(),
+  usdTomanRate: numeric('usd_toman_rate', { precision: 38, scale: 8 }).notNull(),
+  source: text('source').notNull().default('manual'),
+  quotedAt: timestamp('quoted_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, table => [
+  index('asset_quotes_user_idx').on(table.userId),
+  check('asset_quotes_price_positive', sql`${table.priceUsd} > 0`),
+  check('asset_quotes_rate_positive', sql`${table.usdTomanRate} > 0`),
+])
+
 export const usersRelations = relations(users, ({ many, one }) => ({
   assets: many(assets),
   trades: many(trades),
   entries: many(tradeEntries),
+  quotes: many(assetQuotes),
   initialCapital: one(initialCapital, {
     fields: [users.id],
     references: [initialCapital.userId],
@@ -117,6 +140,10 @@ export const usersRelations = relations(users, ({ many, one }) => ({
 export const assetsRelations = relations(assets, ({ one, many }) => ({
   user: one(users, { fields: [assets.userId], references: [users.id] }),
   trades: many(trades),
+  quote: one(assetQuotes, {
+    fields: [assets.id],
+    references: [assetQuotes.assetId],
+  }),
 }))
 
 export const tradesRelations = relations(trades, ({ one, many }) => ({
@@ -132,4 +159,9 @@ export const tradeEntriesRelations = relations(tradeEntries, ({ one }) => ({
 
 export const initialCapitalRelations = relations(initialCapital, ({ one }) => ({
   user: one(users, { fields: [initialCapital.userId], references: [users.id] }),
+}))
+
+export const assetQuotesRelations = relations(assetQuotes, ({ one }) => ({
+  user: one(users, { fields: [assetQuotes.userId], references: [users.id] }),
+  asset: one(assets, { fields: [assetQuotes.assetId], references: [assets.id] }),
 }))

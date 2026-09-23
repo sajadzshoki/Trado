@@ -3,7 +3,7 @@ import { and, asc, desc, eq } from 'drizzle-orm'
 import { MAX_NAME_LENGTH, MAX_NOTE_LENGTH, MAX_TITLE_LENGTH } from '../../shared/constants'
 import { Decimal, parsePositiveDecimal, quoteEntry } from '../../shared/utils/numbers'
 import { positionAfter, type PositionChange } from '../../shared/utils/trade-math'
-import { assets, initialCapital, tradeEntries, trades, users } from '../database/schema'
+import { assetQuotes, assets, initialCapital, tradeEntries, trades, users } from '../database/schema'
 import { useDb } from './db'
 import { apiError, isUniqueViolation, requireUserId, requireUuid } from './http'
 import { hashUserPassword, verifyUserPassword, verifyUserPasswordOrDummy } from './password'
@@ -53,6 +53,14 @@ async function ownedTrade(userId: string, tradeId: string) {
   })
   if (!trade || !trade.asset) apiError(404, 'not_found')
   return trade
+}
+
+async function presentOwned(userId: string, trade: Awaited<ReturnType<typeof ownedTrade>>, withEntries = true) {
+  const db = useDb()
+  const quote = await db.query.assetQuotes.findFirst({
+    where: and(eq(assetQuotes.assetId, trade.assetId), eq(assetQuotes.userId, userId)),
+  })
+  return presentTrade(trade, withEntries, quote ?? null)
 }
 
 export async function registerAccount(event: H3Event, input: {
@@ -186,10 +194,10 @@ export async function listAssets(event: H3Event) {
   const db = useDb()
   const rows = await db.query.assets.findMany({
     where: eq(assets.userId, userId),
-    with: { trades: { columns: { id: true } } },
+    with: { trades: { columns: { id: true } }, quote: true },
     orderBy: [asc(assets.symbol)],
   })
-  return rows.map(asset => presentAsset(asset, asset.trades.length))
+  return rows.map(asset => presentAsset(asset, asset.trades.length, asset.quote ?? null))
 }
 
 function rejectIfShort(entries: { id: string, side: 'buy' | 'sell', quantity: string }[], change: PositionChange) {
@@ -248,7 +256,10 @@ export async function updateAsset(event: H3Event, id: string, input: {
       where: eq(trades.assetId, assetId),
       columns: { id: true },
     })
-    return presentAsset(asset, tradeRows.length)
+    const quote = await db.query.assetQuotes.findFirst({
+      where: and(eq(assetQuotes.assetId, assetId), eq(assetQuotes.userId, userId)),
+    })
+    return presentAsset(asset, tradeRows.length, quote ?? null)
   }
   catch (error) {
     if (isUniqueViolation(error)) apiError(409, 'asset_exists')
@@ -278,9 +289,11 @@ export async function listTrades(event: H3Event) {
     with: { asset: true, entries: true },
     orderBy: [desc(trades.updatedAt)],
   })
+  const quoteRows = await db.query.assetQuotes.findMany({ where: eq(assetQuotes.userId, userId) })
+  const quotes = new Map(quoteRows.map(quote => [quote.assetId, quote]))
   return rows
     .filter(row => row.asset)
-    .map(row => presentTrade(row, false))
+    .map(row => presentTrade(row, false, quotes.get(row.assetId) ?? null))
 }
 
 export async function createTrade(event: H3Event, input: {
@@ -321,13 +334,13 @@ export async function createTrade(event: H3Event, input: {
     return trade.id
   })
   const trade = await ownedTrade(userId, created)
-  return presentTrade(trade, true)
+  return presentOwned(userId, trade)
 }
 
 export async function getTrade(event: H3Event, id: string) {
   const userId = await requireUserId(event)
   const trade = await ownedTrade(userId, requireUuid(id))
-  return presentTrade(trade, true)
+  return presentOwned(userId, trade)
 }
 
 export async function updateTrade(event: H3Event, id: string, input: {
@@ -350,7 +363,7 @@ export async function updateTrade(event: H3Event, id: string, input: {
   const db = useDb()
   await db.update(trades).set(patch).where(and(eq(trades.id, tradeId), eq(trades.userId, userId)))
   const trade = await ownedTrade(userId, tradeId)
-  return presentTrade(trade, true)
+  return presentOwned(userId, trade)
 }
 
 export async function removeTrade(event: H3Event, id: string) {
@@ -385,7 +398,7 @@ export async function addEntry(event: H3Event, tradeIdParam: string, input: Para
     await tx.update(trades).set({ updatedAt: new Date() }).where(eq(trades.id, tradeId))
   })
   const trade = await ownedTrade(userId, tradeId)
-  return presentTrade(trade, true)
+  return presentOwned(userId, trade)
 }
 
 export async function updateEntry(event: H3Event, id: string, input: Parameters<typeof parseEntry>[0]) {
@@ -414,7 +427,7 @@ export async function updateEntry(event: H3Event, id: string, input: Parameters<
     await tx.update(trades).set({ updatedAt: new Date() }).where(eq(trades.id, existing.tradeId))
   })
   const trade = await ownedTrade(userId, existing.tradeId)
-  return presentTrade(trade, true)
+  return presentOwned(userId, trade)
 }
 
 export async function removeEntry(event: H3Event, id: string) {
@@ -431,21 +444,79 @@ export async function removeEntry(event: H3Event, id: string) {
     await tx.delete(tradeEntries).where(and(eq(tradeEntries.id, entryId), eq(tradeEntries.userId, userId)))
     await tx.update(trades).set({ updatedAt: new Date() }).where(eq(trades.id, existing.tradeId))
   })
-  return presentTrade(await ownedTrade(userId, existing.tradeId), true)
+  return presentOwned(userId, await ownedTrade(userId, existing.tradeId))
 }
 
 export async function getDashboard(event: H3Event) {
   const userId = await requireUserId(event)
   const db = useDb()
-  const [capital, tradeRows] = await Promise.all([
+  const [capital, tradeRows, quoteRows] = await Promise.all([
     db.query.initialCapital.findFirst({ where: eq(initialCapital.userId, userId) }),
     db.query.trades.findMany({
       where: eq(trades.userId, userId),
       with: { asset: true, entries: true },
     }),
+    db.query.assetQuotes.findMany({ where: eq(assetQuotes.userId, userId) }),
   ])
   return presentDashboard({
     capital: capital ?? null,
     trades: tradeRows.filter(row => row.asset),
+    quotes: quoteRows,
   })
+}
+
+async function assetWithQuote(userId: string, assetId: string) {
+  const db = useDb()
+  const asset = await ownedAsset(userId, assetId)
+  const [tradeRows, quote] = await Promise.all([
+    db.query.trades.findMany({ where: eq(trades.assetId, assetId), columns: { id: true } }),
+    db.query.assetQuotes.findFirst({
+      where: and(eq(assetQuotes.assetId, assetId), eq(assetQuotes.userId, userId)),
+    }),
+  ])
+  return presentAsset(asset, tradeRows.length, quote ?? null)
+}
+
+export async function saveQuote(event: H3Event, id: string, input: {
+  priceUsd: string
+  usdTomanRate: string
+  quotedAt: string
+}) {
+  const userId = await requireUserId(event)
+  const assetId = requireUuid(id)
+  await ownedAsset(userId, assetId)
+  const price = parsePositiveDecimal(input.priceUsd)
+  if (!price.ok) apiError(422, 'validation_error', { fields: { priceUsd: price.code } })
+  const rate = parsePositiveDecimal(input.usdTomanRate)
+  if (!rate.ok) apiError(422, 'validation_error', { fields: { usdTomanRate: rate.code } })
+  const quotedAt = parseTransactionDate(input.quotedAt)
+  const db = useDb()
+  await db.insert(assetQuotes).values({
+    userId,
+    assetId,
+    priceUsd: price.value.toFixed(12),
+    usdTomanRate: rate.value.toFixed(8),
+    source: 'manual',
+    quotedAt,
+  }).onConflictDoUpdate({
+    target: assetQuotes.assetId,
+    set: {
+      userId,
+      priceUsd: price.value.toFixed(12),
+      usdTomanRate: rate.value.toFixed(8),
+      source: 'manual',
+      quotedAt,
+      updatedAt: new Date(),
+    },
+  })
+  return assetWithQuote(userId, assetId)
+}
+
+export async function clearQuote(event: H3Event, id: string) {
+  const userId = await requireUserId(event)
+  const assetId = requireUuid(id)
+  await ownedAsset(userId, assetId)
+  const db = useDb()
+  await db.delete(assetQuotes).where(and(eq(assetQuotes.assetId, assetId), eq(assetQuotes.userId, userId)))
+  return assetWithQuote(userId, assetId)
 }

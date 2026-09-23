@@ -1,5 +1,6 @@
 import type { DisplayCurrency, TradeSide } from '../constants'
 import type { AmountField } from '../utils/numbers'
+import type { Figure, GapReason } from '../utils/finance'
 import type { TradeStatus } from '../utils/trade-math'
 
 export interface PublicUser {
@@ -10,6 +11,14 @@ export interface PublicUser {
   displayCurrency: DisplayCurrency
 }
 
+export interface PriceQuoteRecord {
+  priceUsd: string
+  usdTomanRate: string
+  priceToman: string
+  source: string
+  quotedAt: string
+}
+
 export interface AssetRecord {
   id: string
   symbol: string
@@ -17,6 +26,7 @@ export interface AssetRecord {
   icon: string | null
   isActive: boolean
   tradeCount: number
+  quote: PriceQuoteRecord | null
   createdAt: string
 }
 
@@ -69,6 +79,13 @@ export interface TradeSummary {
   isFlat: boolean
   isOversold: boolean
   status: TradeStatus
+  markAvailable: boolean
+  unrealizedPnlUsd: string | null
+  unrealizedPnlToman: string | null
+  currentValueUsd: string | null
+  currentValueToman: string | null
+  totalPnlUsd: string | null
+  totalPnlToman: string | null
   createdAt: string
   updatedAt: string
   lastTransactedAt: string | null
@@ -78,13 +95,29 @@ export interface TradeDetail extends TradeSummary {
   entries: TradeEntryRecord[]
 }
 
-export interface OpenPosition {
+export interface HoldingRecord {
   assetId: string
   symbol: string
   name: string
-  remainingQuantity: string
-  openCostUsd: string
-  openCostToman: string
+  icon: string | null
+  boughtQuantity: string
+  soldQuantity: string
+  currentQuantity: string
+  oversold: boolean
+  buyUsd: string
+  sellUsd: string
+  buyToman: string
+  sellToman: string
+  averageBuyUsd: string | null
+  averageBuyToman: string | null
+  realizedPnlUsd: string
+  realizedPnlToman: string
+  markAvailable: boolean
+  unrealizedPnlUsd: string | null
+  unrealizedPnlToman: string | null
+  currentValueUsd: string | null
+  currentValueToman: string | null
+  quote: PriceQuoteRecord | null
 }
 
 export interface DashboardRecord {
@@ -95,24 +128,26 @@ export interface DashboardRecord {
   totalBoughtToman: string
   totalSoldUsd: string
   totalSoldToman: string
-  netCashFlowUsd: string
-  netCashFlowToman: string
-  openCostUsd: string
-  openCostToman: string
+  cash: Figure
+  assetValue: Figure
+  portfolio: Figure
+  unrealized: Figure
+  totalPnl: Figure
+  performance: { available: true, percent: string } | { available: false, reason: GapReason }
+  allocation: { cashPercent: string, assetPercent: string } | null
+  holdings: HoldingRecord[]
+  openTrades: TradeSummary[]
+  recentTrades: TradeSummary[]
   tradeCount: number
   oversoldCount: number
-  openPositions: OpenPosition[]
-  recentTrades: TradeSummary[]
-  performance: {
-    available: false
-    reason: 'live_prices_not_tracked'
-  }
 }
 
 export interface EntryPayload {
   side: TradeSide
-  quantity: string
-  unitPriceUsd: string
+  quantity?: string | null
+  unitPriceUsd?: string | null
+  totalUsd?: string | null
+  solveFor?: AmountField
   usdTomanRate: string
   transactedAt: string
   note?: string | null

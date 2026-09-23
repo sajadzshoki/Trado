@@ -5,7 +5,6 @@ definePageMeta({ middleware: 'authenticated' })
 
 const { t } = useI18n()
 const localePath = useLocalePath()
-const format = useFormatters()
 const { message } = useApiError()
 
 useHead({ title: () => t('trades.title') })
@@ -32,37 +31,7 @@ const { data, pending, error, refresh } = await useFetch<TradeSummary[]>('/api/t
       <UButton :to="localePath('/trades/new')" color="neutral" size="sm">{{ t('trades.new') }}</UButton>
     </EmptyState>
     <div v-else-if="data">
-      <NuxtLink
-        v-for="trade in data"
-        :key="trade.id"
-        :to="localePath(`/trades/${trade.id}`)"
-        class="row-link"
-      >
-        <div class="min-w-0">
-          <div class="flex items-baseline gap-2">
-            <span class="font-medium text-highlighted">{{ trade.asset.symbol }}</span>
-            <span class="truncate text-sm text-muted">{{ trade.title || trade.asset.name }}</span>
-          </div>
-          <p class="mt-1 text-xs text-dimmed">
-            {{ t('trades.entryCount', { count: trade.entryCount }) }}
-            ·
-            <template v-if="trade.isOversold">{{ t('trades.oversold') }}</template>
-            <template v-else-if="trade.status === 'closed'">{{ t('trades.statusClosed') }}</template>
-            <template v-else-if="trade.status === 'open'">{{ t('trades.statusOpen') }} · {{ t('trades.remaining', { qty: format.qty(trade.remainingQuantity) }) }}</template>
-            <template v-else>{{ t('trades.noEntries') }}</template>
-          </p>
-          <p v-if="trade.lastTransactedAt" class="num mt-1 text-xs text-dimmed">
-            {{ format.dateTime(trade.lastTransactedAt) }}
-          </p>
-        </div>
-        <MoneyText
-          v-if="!trade.isEmpty"
-          :usd="trade.realizedPnlUsd"
-          :toman="trade.realizedPnlToman"
-          signed
-          size="sm"
-        />
-      </NuxtLink>
+      <TradeRow v-for="trade in data" :key="trade.id" :trade="trade" />
     </div>
   </div>
 </template>

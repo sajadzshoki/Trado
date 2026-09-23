@@ -190,6 +190,21 @@ html[dir="rtl"] .kicker {
   color: var(--color-loss);
 }
 
+.mix {
+  display: flex;
+  height: 0.35rem;
+  overflow: hidden;
+  background: var(--ui-bg-accented);
+}
+
+.mix-cash {
+  background: #c6a36a;
+}
+
+.mix-hold {
+  background: #8fa888;
+}
+
 .bottom-nav {
   position: fixed;
   inset-inline: 0;

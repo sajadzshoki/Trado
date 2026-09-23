@@ -20,9 +20,11 @@ export class PricesNotEnabledError extends Error {
 }
 
 /**
- * Assets are entered by hand. A later provider can implement PriceProvider
- * and store its id on assets.price_provider / assets.external_asset_id.
- * Nothing in the current API calls this.
+ * External prices are not connected. The portfolio reads stored rows in
+ * asset_quotes and never calls this. A later provider should upsert that
+ * table (source = provider id) instead of being called while a page renders.
+ * assets.price_provider and assets.external_asset_id remain the reserved
+ * link to that provider.
  */
 export function usePriceProvider(): PriceProvider {
   return {

@@ -2,6 +2,8 @@
 import { z } from 'zod'
 import type { AssetRecord } from '~~/shared/types/journal'
 import { ICON_MIME_TYPES, MAX_ICON_BYTES } from '~~/shared/constants'
+import { quoteUnitToman } from '~~/shared/utils/finance'
+import { fromDateTimeLocal, parsePositiveDecimal, toDateTimeLocal, trimDecimal } from '~~/shared/utils/numbers'
 
 definePageMeta({ middleware: 'authenticated' })
 
@@ -16,6 +18,14 @@ const creating = ref(false)
 const editingId = ref<string | null>(null)
 const confirmId = ref<string | null>(null)
 const formError = ref('')
+const quotingId = ref<string | null>(null)
+const quotePending = ref(false)
+const quoteError = ref('')
+const quoteState = reactive({
+  priceUsd: '',
+  usdTomanRate: '',
+  quotedAt: toDateTimeLocal(),
+})
 const state = reactive({
   symbol: '',
   name: '',
@@ -110,6 +120,75 @@ async function toggle(asset: AssetRecord) {
   }
 }
 
+const quotePreview = computed(() => {
+  const price = parsePositiveDecimal(quoteState.priceUsd)
+  const rate = parsePositiveDecimal(quoteState.usdTomanRate)
+  if (!price.ok || !rate.ok) return null
+  return quoteUnitToman(price.value.toString(), rate.value.toString())
+})
+
+function startQuote(asset: AssetRecord) {
+  quotingId.value = quotingId.value === asset.id ? null : asset.id
+  quoteError.value = ''
+  quoteState.priceUsd = asset.quote ? trimDecimal(asset.quote.priceUsd) : ''
+  quoteState.usdTomanRate = asset.quote ? trimDecimal(asset.quote.usdTomanRate) : ''
+  quoteState.quotedAt = toDateTimeLocal(asset.quote ? new Date(asset.quote.quotedAt) : new Date())
+}
+
+async function saveQuote(id: string) {
+  quoteError.value = ''
+  const price = parsePositiveDecimal(quoteState.priceUsd)
+  const rate = parsePositiveDecimal(quoteState.usdTomanRate)
+  if (!price.ok) {
+    quoteError.value = t(`validation.${price.code}`)
+    return
+  }
+  if (!rate.ok) {
+    quoteError.value = t(`validation.${rate.code}`)
+    return
+  }
+  const quotedAt = fromDateTimeLocal(quoteState.quotedAt)
+  if (!quotedAt) {
+    quoteError.value = t('validation.invalid_date')
+    return
+  }
+  quotePending.value = true
+  try {
+    await $fetch(`/api/assets/${id}/quote`, {
+      method: 'PUT',
+      body: {
+        priceUsd: quoteState.priceUsd,
+        usdTomanRate: quoteState.usdTomanRate,
+        quotedAt,
+      },
+    })
+    quotingId.value = null
+    await refresh()
+  }
+  catch (cause) {
+    quoteError.value = message(cause)
+  }
+  finally {
+    quotePending.value = false
+  }
+}
+
+async function clearQuote(id: string) {
+  quoteError.value = ''
+  quotePending.value = true
+  try {
+    await $fetch(`/api/assets/${id}/quote`, { method: 'DELETE' })
+    quotingId.value = null
+    await refresh()
+  }
+  catch (cause) {
+    quoteError.value = message(cause)
+  }
+  finally {
+    quotePending.value = false
+  }
+}
+
 async function remove(id: string) {
   formError.value = ''
   try {
@@ -159,6 +238,48 @@ async function remove(id: string) {
               <button type="button" class="text-muted" @click="confirmId = asset.id">{{ t('assets.delete') }}</button>
             </div>
           </div>
+          <div class="mt-4">
+            <p class="text-xs text-dimmed">{{ t('assets.currentPrice') }}</p>
+            <template v-if="asset.quote">
+              <p class="num mt-1 text-sm">{{ format.usd(asset.quote.priceUsd) }}</p>
+              <p class="is-calculated num mt-1 text-xs text-muted">{{ format.toman(asset.quote.priceToman) }}</p>
+              <p class="mt-1 text-xs text-dimmed">
+                {{ t('assets.priceManual') }}
+                · {{ t('assets.quotedOn', { date: format.dateTime(asset.quote.quotedAt) }) }}
+              </p>
+            </template>
+            <p v-else class="mt-1 text-xs text-dimmed">{{ t('assets.noPrice') }}</p>
+            <button type="button" class="mt-2 text-xs text-muted" @click="startQuote(asset)">
+              {{ asset.quote ? t('common.edit') : t('assets.savePrice') }}
+            </button>
+          </div>
+          <form v-if="quotingId === asset.id" class="mt-4 space-y-3" @submit.prevent="saveQuote(asset.id)">
+            <p class="text-xs leading-5 text-dimmed">{{ t('assets.priceHint') }}</p>
+            <label class="block text-sm">
+              <span class="mb-2 block text-muted">{{ t('trades.unitPrice') }}</span>
+              <UInput v-model="quoteState.priceUsd" inputmode="decimal" autocomplete="off" class="w-full" />
+            </label>
+            <label class="block text-sm">
+              <span class="mb-2 block text-muted">{{ t('trades.rate') }}</span>
+              <UInput v-model="quoteState.usdTomanRate" inputmode="decimal" autocomplete="off" class="w-full" />
+              <span class="mt-1 block text-xs leading-5 text-dimmed">{{ t('assets.priceRateNote') }}</span>
+            </label>
+            <label class="block text-sm">
+              <span class="mb-2 block text-muted">{{ t('trades.date') }}</span>
+              <UInput v-model="quoteState.quotedAt" type="datetime-local" class="w-full" />
+            </label>
+            <p v-if="quotePreview" class="is-calculated text-sm">
+              <span class="text-xs text-dimmed">{{ t('trades.calculated') }}</span>
+              <bdi class="num mt-1 block text-muted">{{ format.toman(quotePreview) }}</bdi>
+            </p>
+            <p v-if="quoteError" class="text-sm text-loss" role="alert">{{ quoteError }}</p>
+            <div class="flex flex-wrap gap-3">
+              <UButton type="submit" color="neutral" size="sm" :loading="quotePending">{{ t('assets.savePrice') }}</UButton>
+              <button v-if="asset.quote" type="button" class="text-sm text-muted" :disabled="quotePending" @click="clearQuote(asset.id)">
+                {{ t('assets.clearPrice') }}
+              </button>
+            </div>
+          </form>
           <p v-if="confirmId === asset.id" class="mt-3 text-sm text-muted">
             {{ t('assets.deleteConfirm') }}
             <button type="button" class="ms-3 text-loss" @click="remove(asset.id)">{{ t('trades.confirmDelete') }}</button>

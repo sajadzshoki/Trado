@@ -13,7 +13,8 @@
     "postinstall": "nuxt prepare",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "test": "node --experimental-strip-types --import ./test/register.mjs --test test/*.test.ts"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.2.7",

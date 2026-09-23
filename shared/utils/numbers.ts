@@ -225,6 +225,13 @@ export function formatQuantity(value: string, locale: string) {
   return formatDecimal(value, locale, 8, 0)
 }
 
+export function formatPercent(value: string, locale: string, signed = false) {
+  const dec = new Decimal(value)
+  const body = formatDecimal(dec.abs(), locale, 2, 2)
+  const sign = signed ? signPrefix(dec) : ''
+  return `${sign}${body}%`
+}
+
 export function formatRate(value: string, locale: string) {
   const body = formatDecimal(value, locale, 4, 0)
   const label = locale.startsWith('fa') ? 'تومان' : 'Toman'

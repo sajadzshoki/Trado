@@ -65,6 +65,12 @@ export const tradeUpdateSchema = z.object({
   notes: z.string().trim().max(MAX_NOTE_LENGTH).nullable().optional(),
 })
 
+export const quoteSchema = z.object({
+  priceUsd: z.string().trim().min(1).max(64),
+  usdTomanRate: z.string().trim().min(1).max(64),
+  quotedAt: z.string().trim().min(1).max(40),
+})
+
 export const capitalSchema = z.object({
   amountUsd: z.string().trim().min(1).max(64),
   usdTomanRate: z.string().trim().min(1).max(64),

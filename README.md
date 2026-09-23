@@ -20,6 +20,7 @@ cp .env.example .env
 docker compose up -d
 npm install
 npm run db:migrate
+npm test
 npm run dev
 ```
 
@@ -45,7 +46,11 @@ Each entry stores the side, quantity, USD unit price, USD total, the USD/Toman r
 
 A trade is open while buy quantity exceeds sell quantity, and closed when those quantities are equal. A sell cannot exceed the quantity that trade currently holds. Buys and sells are still not matched lot by lot.
 
-Initial capital stores a USD amount, the rate on that day, and the Toman equivalent. Mark-to-market performance against that capital is not calculated, because live prices are not tracked.
+Inside one trade, realized P/L is average cost on the overlapping quantity. Unrealized P/L is the remaining quantity times the current price you enter, minus that same average cost. Asset totals add those trade results. They are not blended into one cost across trades.
+
+Initial capital stores a USD amount, the rate on that day, and the Toman equivalent. Current cash is that capital plus sold value minus bought value, in each currency. Current asset value uses the manual price. Portfolio value is cash plus asset value. Performance is `(portfolio − initial capital) / initial capital` in USD. A missing capital or a missing price leaves that figure blank. It is not shown as zero.
+
+A current price is one row per asset: USD price, the Toman rate used only to convert that price, source `manual`, and the date. Changing it does not rewrite entry totals, capital, or realized P/L. `server/services/prices.ts` is still the extension point for a later provider, which should upsert `asset_quotes` instead of being called while a page renders.
 
 ## Database
 
@@ -53,10 +58,11 @@ Initial capital stores a USD amount, the rate on that day, and the Toman equival
 | --- | --- |
 | `users` | Phone, password hash, name, locale, display currency |
 | `otp_challenges` | Reserved for a future OTP flow. Nothing writes to it yet |
-| `assets` | User-owned symbols |
+| `assets` | User-owned symbols, optional icon, active or inactive |
 | `trades` | A user-defined group of entries for one asset |
 | `trade_entries` | Buy or sell rows with USD and Toman amounts |
 | `initial_capital` | One capital record per user |
+| `asset_quotes` | One current manual price per asset. Replaceable later by a provider |
 
 ## Routes
 
@@ -86,6 +92,8 @@ API:
 - `POST /api/assets`
 - `PATCH /api/assets/:id`
 - `DELETE /api/assets/:id`
+- `PUT /api/assets/:id/quote`
+- `DELETE /api/assets/:id/quote`
 - `GET /api/trades`
 - `POST /api/trades`
 - `GET /api/trades/:id`
@@ -100,8 +108,6 @@ API:
 
 - OTP send and verify
 - Changing a phone number
-- Live prices. `assets.price_provider`, `assets.external_asset_id`, and `server/services/prices.ts` are the extension point. Nothing calls a market API
-- Performance against initial capital
+- A market price provider. Manual quotes live in `asset_quotes`. `assets.price_provider`, `assets.external_asset_id`, and `server/services/prices.ts` are the extension point. Nothing calls a market API
 - Capital history
 - CSV export
-- Charts

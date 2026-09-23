@@ -8,6 +8,7 @@ export function useFormatters() {
     toman: (value: string, signed = false) => formatToman(value, tag.value, signed),
     qty: (value: string) => formatQuantity(value, tag.value),
     rate: (value: string) => formatRate(value, tag.value),
+    percent: (value: string, signed = false) => formatPercent(value, tag.value, signed),
     dateTime: (value: string) => formatDateTime(value, tag.value),
     date: (value: string) => formatDate(value, tag.value),
     tone: (value: string) => {

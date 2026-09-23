@@ -1,12 +1,13 @@
-import type { AssetRecord, CapitalRecord, DashboardRecord, OpenPosition, PublicUser, TradeDetail, TradeEntryRecord, TradeSummary } from '../../shared/types/journal'
-import { summarizeEntries, tradeStatus } from '../../shared/utils/trade-math'
-import type { assets, initialCapital, tradeEntries, trades, users } from '../database/schema'
+import type { AssetRecord, CapitalRecord, DashboardRecord, HoldingRecord, PriceQuoteRecord, PublicUser, TradeDetail, TradeEntryRecord, TradeSummary } from '../../shared/types/journal'
+import { buildPortfolio, quoteUnitToman, valueTrade, type PortfolioAsset } from '../../shared/utils/finance'
 import { Decimal } from '../../shared/utils/numbers'
+import type { assetQuotes, assets, initialCapital, tradeEntries, trades, users } from '../database/schema'
 
 type UserRow = typeof users.$inferSelect
 type AssetRow = typeof assets.$inferSelect
 type CapitalRow = typeof initialCapital.$inferSelect
 type EntryRow = typeof tradeEntries.$inferSelect
+type QuoteRow = typeof assetQuotes.$inferSelect
 type TradeRow = typeof trades.$inferSelect & {
   asset: AssetRow
   entries: EntryRow[]
@@ -26,7 +27,17 @@ export function presentUser(user: UserRow): PublicUser {
   }
 }
 
-export function presentAsset(asset: AssetRow, tradeCount: number): AssetRecord {
+export function presentQuote(row: QuoteRow): PriceQuoteRecord {
+  return {
+    priceUsd: row.priceUsd,
+    usdTomanRate: row.usdTomanRate,
+    priceToman: quoteUnitToman(row.priceUsd, row.usdTomanRate),
+    source: row.source,
+    quotedAt: iso(row.quotedAt),
+  }
+}
+
+export function presentAsset(asset: AssetRow, tradeCount: number, quote: QuoteRow | null = null): AssetRecord {
   return {
     id: asset.id,
     symbol: asset.symbol,
@@ -34,6 +45,7 @@ export function presentAsset(asset: AssetRow, tradeCount: number): AssetRecord {
     icon: asset.iconData,
     isActive: asset.isActive,
     tradeCount,
+    quote: quote ? presentQuote(quote) : null,
     createdAt: iso(asset.createdAt),
   }
 }
@@ -61,18 +73,36 @@ export function presentEntry(entry: EntryRow): TradeEntryRecord {
   }
 }
 
-export function presentTrade(trade: TradeRow, withEntries: boolean): TradeSummary | TradeDetail {
+function markFields(valued: ReturnType<typeof valueTrade>) {
+  const unrealized = valued.unrealized
+  const current = valued.currentValue
+  return {
+    markAvailable: unrealized.available,
+    unrealizedPnlUsd: unrealized.available ? unrealized.usd : null,
+    unrealizedPnlToman: unrealized.available ? unrealized.toman : null,
+    currentValueUsd: current.available ? current.usd : null,
+    currentValueToman: current.available ? current.toman : null,
+    totalPnlUsd: unrealized.available ? new Decimal(valued.math.realizedPnlUsd).plus(unrealized.usd).toFixed(8) : null,
+    totalPnlToman: unrealized.available ? new Decimal(valued.math.realizedPnlToman).plus(unrealized.toman).toFixed(4) : null,
+  }
+}
+
+export function presentTrade(
+  trade: TradeRow,
+  withEntries: boolean,
+  quote: { priceUsd: string, usdTomanRate: string } | null = null,
+): TradeSummary | TradeDetail {
   const entries = [...trade.entries].sort((a, b) => {
     const delta = new Date(a.transactedAt).getTime() - new Date(b.transactedAt).getTime()
     if (delta !== 0) return delta
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   })
-  const math = summarizeEntries(entries.map(entry => ({
+  const valued = valueTrade(entries.map(entry => ({
     side: entry.side,
     quantity: entry.quantity,
     totalUsd: entry.totalUsd,
     totalToman: entry.totalToman,
-  })))
+  })), quote)
   const last = entries.at(-1)
   const summary: TradeSummary = {
     id: trade.id,
@@ -84,8 +114,9 @@ export function presentTrade(trade: TradeRow, withEntries: boolean): TradeSummar
       name: trade.asset.name,
     },
     entryCount: entries.length,
-    ...math,
-    status: tradeStatus(entries.length, math.buyQuantity, math.sellQuantity),
+    ...valued.math,
+    status: valued.status,
+    ...markFields(valued),
     createdAt: iso(trade.createdAt),
     updatedAt: iso(trade.updatedAt),
     lastTransactedAt: last ? iso(last.transactedAt) : null,
@@ -97,84 +128,109 @@ export function presentTrade(trade: TradeRow, withEntries: boolean): TradeSummar
   }
 }
 
+function presentHolding(holding: ReturnType<typeof buildPortfolio>['holdings'][number]): HoldingRecord {
+  return {
+    assetId: holding.assetId,
+    symbol: holding.symbol,
+    name: holding.name,
+    icon: holding.icon,
+    boughtQuantity: holding.boughtQuantity,
+    soldQuantity: holding.soldQuantity,
+    currentQuantity: holding.currentQuantity,
+    oversold: holding.oversold,
+    buyUsd: holding.buyUsd,
+    sellUsd: holding.sellUsd,
+    buyToman: holding.buyToman,
+    sellToman: holding.sellToman,
+    averageBuyUsd: holding.averageBuyUsd,
+    averageBuyToman: holding.averageBuyToman,
+    realizedPnlUsd: holding.realizedPnlUsd,
+    realizedPnlToman: holding.realizedPnlToman,
+    markAvailable: holding.unrealized.available,
+    unrealizedPnlUsd: holding.unrealized.available ? holding.unrealized.usd : null,
+    unrealizedPnlToman: holding.unrealized.available ? holding.unrealized.toman : null,
+    currentValueUsd: holding.currentValue.available ? holding.currentValue.usd : null,
+    currentValueToman: holding.currentValue.available ? holding.currentValue.toman : null,
+    quote: holding.quote
+      ? {
+          priceUsd: holding.quote.priceUsd,
+          usdTomanRate: holding.quote.usdTomanRate,
+          priceToman: quoteUnitToman(holding.quote.priceUsd, holding.quote.usdTomanRate),
+          source: holding.quote.source,
+          quotedAt: holding.quote.quotedAt,
+        }
+      : null,
+  }
+}
+
+/**
+ * Dashboard figures come from recorded trades, stored capital, and stored quotes.
+ * This does not call a price provider.
+ */
 export function presentDashboard(input: {
   capital: CapitalRow | null
   trades: TradeRow[]
+  quotes: QuoteRow[]
 }): DashboardRecord {
+  const quotes = new Map(input.quotes.map(quote => [quote.assetId, quote]))
   const summaries = input.trades
     .slice()
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .map(trade => presentTrade(trade, false) as TradeSummary)
+    .map(trade => presentTrade(trade, false, quotes.get(trade.assetId) ?? null) as TradeSummary)
 
-  const positions = new Map<string, OpenPosition & { qty: Decimal, usd: Decimal, toman: Decimal }>()
-  let boughtUsd = new Decimal(0)
-  let boughtToman = new Decimal(0)
-  let soldUsd = new Decimal(0)
-  let soldToman = new Decimal(0)
-  let realizedUsd = new Decimal(0)
-  let realizedToman = new Decimal(0)
-  let openUsd = new Decimal(0)
-  let openToman = new Decimal(0)
-  let oversoldCount = 0
-
-  for (const trade of summaries) {
-    boughtUsd = boughtUsd.plus(trade.buyUsd)
-    boughtToman = boughtToman.plus(trade.buyToman)
-    soldUsd = soldUsd.plus(trade.sellUsd)
-    soldToman = soldToman.plus(trade.sellToman)
-    realizedUsd = realizedUsd.plus(trade.realizedPnlUsd)
-    realizedToman = realizedToman.plus(trade.realizedPnlToman)
-    openUsd = openUsd.plus(trade.openCostUsd)
-    openToman = openToman.plus(trade.openCostToman)
-    if (trade.isOversold) oversoldCount += 1
-    if (new Decimal(trade.remainingQuantity).lte(0)) continue
-    const current = positions.get(trade.asset.id) ?? {
-      assetId: trade.asset.id,
+  const assets = new Map<string, PortfolioAsset>()
+  for (const trade of input.trades) {
+    if (assets.has(trade.assetId)) continue
+    assets.set(trade.assetId, {
+      id: trade.asset.id,
       symbol: trade.asset.symbol,
       name: trade.asset.name,
-      remainingQuantity: '0',
-      openCostUsd: '0',
-      openCostToman: '0',
-      qty: new Decimal(0),
-      usd: new Decimal(0),
-      toman: new Decimal(0),
-    }
-    current.qty = current.qty.plus(trade.remainingQuantity)
-    current.usd = current.usd.plus(trade.openCostUsd)
-    current.toman = current.toman.plus(trade.openCostToman)
-    positions.set(trade.asset.id, current)
+      icon: trade.asset.iconData,
+    })
   }
 
-  const openPositions = [...positions.values()]
-    .sort((a, b) => a.symbol.localeCompare(b.symbol))
-    .map(position => ({
-      assetId: position.assetId,
-      symbol: position.symbol,
-      name: position.name,
-      remainingQuantity: position.qty.toFixed(12),
-      openCostUsd: position.usd.toFixed(8),
-      openCostToman: position.toman.toFixed(4),
-    }))
+  const figures = buildPortfolio({
+    capital: input.capital
+      ? { amountUsd: input.capital.amountUsd, amountToman: input.capital.amountToman }
+      : null,
+    assets: [...assets.values()],
+    trades: input.trades.map(trade => ({
+      assetId: trade.assetId,
+      entries: trade.entries.map(entry => ({
+        side: entry.side,
+        quantity: entry.quantity,
+        totalUsd: entry.totalUsd,
+        totalToman: entry.totalToman,
+      })),
+    })),
+    quotes: input.quotes.map(quote => ({
+      assetId: quote.assetId,
+      priceUsd: quote.priceUsd,
+      usdTomanRate: quote.usdTomanRate,
+      source: quote.source,
+      quotedAt: iso(quote.quotedAt),
+    })),
+  })
 
   return {
     initialCapital: input.capital ? presentCapital(input.capital) : null,
-    realizedPnlUsd: realizedUsd.toFixed(8),
-    realizedPnlToman: realizedToman.toFixed(4),
-    totalBoughtUsd: boughtUsd.toFixed(12),
-    totalBoughtToman: boughtToman.toFixed(4),
-    totalSoldUsd: soldUsd.toFixed(12),
-    totalSoldToman: soldToman.toFixed(4),
-    netCashFlowUsd: soldUsd.minus(boughtUsd).toFixed(8),
-    netCashFlowToman: soldToman.minus(boughtToman).toFixed(4),
-    openCostUsd: openUsd.toFixed(8),
-    openCostToman: openToman.toFixed(4),
-    tradeCount: summaries.length,
-    oversoldCount,
-    openPositions,
+    realizedPnlUsd: figures.realized.usd,
+    realizedPnlToman: figures.realized.toman,
+    totalBoughtUsd: figures.bought.usd,
+    totalBoughtToman: figures.bought.toman,
+    totalSoldUsd: figures.sold.usd,
+    totalSoldToman: figures.sold.toman,
+    cash: figures.cash,
+    assetValue: figures.assetValue,
+    portfolio: figures.portfolio,
+    unrealized: figures.unrealized,
+    totalPnl: figures.totalPnl,
+    performance: figures.performance,
+    allocation: figures.allocation,
+    holdings: figures.holdings.map(presentHolding),
+    openTrades: summaries.filter(trade => trade.status === 'open'),
     recentTrades: summaries.slice(0, 6),
-    performance: {
-      available: false,
-      reason: 'live_prices_not_tracked',
-    },
+    tradeCount: summaries.length,
+    oversoldCount: figures.oversoldCount,
   }
 }

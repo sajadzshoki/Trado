@@ -199,21 +199,17 @@ async function deleteTrade() {
             <span class="text-muted">{{ t('trades.status') }}</span>
             <span>{{ statusText(data) }}</span>
           </div>
-          <div class="flex items-start justify-between gap-4 border-b border-default py-3">
-            <span class="pt-1 text-sm text-muted">{{ t('trades.invested') }}</span>
-            <MoneyText :usd="data.buyUsd" :toman="data.buyToman" size="sm" />
+          <div class="flex items-baseline justify-between gap-4 border-b border-default py-3 text-sm">
+            <span class="text-muted">{{ t('trades.boughtQty') }}</span>
+            <bdi class="num">{{ format.qty(data.buyQuantity) }} {{ data.asset.symbol }}</bdi>
           </div>
-          <div class="flex items-start justify-between gap-4 border-b border-default py-3">
-            <span class="pt-1 text-sm text-muted">{{ t('trades.soldAmount') }}</span>
-            <MoneyText :usd="data.sellUsd" :toman="data.sellToman" size="sm" />
+          <div class="flex items-baseline justify-between gap-4 border-b border-default py-3 text-sm">
+            <span class="text-muted">{{ t('trades.soldQty') }}</span>
+            <bdi class="num">{{ format.qty(data.sellQuantity) }} {{ data.asset.symbol }}</bdi>
           </div>
           <div class="flex items-baseline justify-between gap-4 border-b border-default py-3 text-sm">
             <span class="text-muted">{{ t('trades.remainingQty') }}</span>
             <bdi class="num">{{ format.qty(data.remainingQuantity) }} {{ data.asset.symbol }}</bdi>
-          </div>
-          <div class="flex items-start justify-between gap-4 border-b border-default py-3">
-            <span class="pt-1 text-sm text-muted">{{ t('trades.profit') }}</span>
-            <MoneyText :usd="data.realizedPnlUsd" :toman="data.realizedPnlToman" signed size="sm" />
           </div>
           <div v-if="data.averageBuyUsd" class="flex items-start justify-between gap-4 border-b border-default py-3">
             <span class="text-sm text-muted">{{ t('trades.avgBuy') }}</span>
@@ -221,6 +217,39 @@ async function deleteTrade() {
               <bdi class="num block text-sm">{{ format.usd(data.averageBuyUsd) }}</bdi>
               <bdi v-if="data.averageBuyToman" class="num mt-1 block text-xs text-muted">{{ format.toman(data.averageBuyToman) }}</bdi>
             </span>
+          </div>
+          <div class="flex items-start justify-between gap-4 border-b border-default py-3">
+            <span class="pt-1 text-sm text-muted">{{ t('trades.totalBuy') }}</span>
+            <MoneyText :usd="data.buyUsd" :toman="data.buyToman" size="sm" />
+          </div>
+          <div class="flex items-start justify-between gap-4 border-b border-default py-3">
+            <span class="pt-1 text-sm text-muted">{{ t('trades.totalSell') }}</span>
+            <MoneyText :usd="data.sellUsd" :toman="data.sellToman" size="sm" />
+          </div>
+          <div class="flex items-start justify-between gap-4 border-b border-default py-3">
+            <span class="pt-1 text-sm text-muted">{{ t('trades.realized') }}</span>
+            <MoneyText :usd="data.realizedPnlUsd" :toman="data.realizedPnlToman" signed size="sm" />
+          </div>
+          <div class="flex items-start justify-between gap-4 border-b border-default py-3">
+            <span class="pt-1 text-sm text-muted">{{ t('trades.unrealized') }}</span>
+            <MoneyText
+              v-if="data.markAvailable && data.unrealizedPnlUsd != null && data.unrealizedPnlToman != null"
+              :usd="data.unrealizedPnlUsd"
+              :toman="data.unrealizedPnlToman"
+              signed
+              size="sm"
+            />
+            <NuxtLink v-else :to="localePath('/assets')" class="text-sm text-muted underline underline-offset-4">
+              {{ t('trades.setPrice') }}
+            </NuxtLink>
+          </div>
+          <div v-if="data.totalPnlUsd != null && data.totalPnlToman != null" class="flex items-start justify-between gap-4 border-b border-default py-3">
+            <span class="pt-1 text-sm text-muted">{{ t('trades.totalPnl') }}</span>
+            <MoneyText :usd="data.totalPnlUsd" :toman="data.totalPnlToman" signed size="sm" />
+          </div>
+          <div v-if="data.currentValueUsd != null && data.currentValueToman != null" class="flex items-start justify-between gap-4 border-b border-default py-3">
+            <span class="pt-1 text-sm text-muted">{{ t('trades.currentValue') }}</span>
+            <MoneyText :usd="data.currentValueUsd" :toman="data.currentValueToman" size="sm" />
           </div>
         </div>
         <p class="mt-3 text-xs leading-5 text-dimmed">{{ t('trades.methodNote') }}</p>

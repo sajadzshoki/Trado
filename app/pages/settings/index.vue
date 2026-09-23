@@ -245,7 +245,9 @@ async function logout() {
         </UFormField>
         <div v-if="capitalPreview" class="rule py-3 text-sm">
           <p class="num">{{ capitalPreview.usd }}</p>
-          <p class="num mt-1 text-muted">{{ capitalPreview.toman }}</p>
+          <p class="mt-3 text-xs text-dimmed">{{ t('settings.equivalent') }}</p>
+          <p class="is-calculated num mt-1 text-muted">{{ capitalPreview.toman }}</p>
+          <p class="mt-2 text-xs leading-5 text-dimmed">{{ t('settings.capitalRateNote') }}</p>
         </div>
         <p v-if="capitalSaved" class="text-sm text-muted">{{ t('settings.saved') }}</p>
         <p v-if="capitalError" class="text-sm text-loss">{{ capitalError }}</p>
