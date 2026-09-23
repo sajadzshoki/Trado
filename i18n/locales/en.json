@@ -194,9 +194,9 @@
   },
   "assets": {
     "title": "Assets",
-    "subtitle": "Coins and tokens you record yourself. Current prices are entered by hand.",
+    "subtitle": "Coins and tokens you record yourself. A market id is optional, and no market source is connected.",
     "currentPrice": "Current price",
-    "priceHint": "A manual price for now. A later source can replace this without changing past entries.",
+    "priceHint": "The price you enter is stored with its time and source. A later source can replace this quote without changing past entries.",
     "savePrice": "Save price",
     "clearPrice": "Clear price",
     "noPrice": "No price set.",
@@ -226,7 +226,14 @@
     "edit": "Edit",
     "inUse": "This asset is used by a trade and cannot be deleted.",
     "symbolHint": "Letters and numbers, up to 12 characters.",
-    "nameHint": "A name you will recognize."
+    "nameHint": "A name you will recognize.",
+    "sourceLine": "Source: {source}",
+    "sourceManual": "Manual",
+    "updated": "Updated {date}",
+    "externalId": "Market id",
+    "externalIdHint": "Optional. A later price source can use this id. The journal works without it.",
+    "externalIdValue": "Market id: {id}",
+    "linkedProvider": "Price source: {id}"
   },
   "settings": {
     "title": "Settings",
@@ -279,7 +286,8 @@
     "need_two": "Enter two of quantity, unit price, and total.",
     "insufficient_quantity": "This trade does not hold enough quantity for that sell.",
     "invalid_icon": "Use a PNG, JPEG, or WebP image.",
-    "icon_too_large": "Icon must be 80 KB or smaller."
+    "icon_too_large": "Icon must be 80 KB or smaller.",
+    "external_id": "Use letters, numbers, and . _ : -"
   },
   "errors": {
     "generic": "Something went wrong. Try again.",

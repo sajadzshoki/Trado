@@ -1,5 +1,5 @@
 import type { TradeSide } from '../../shared/constants'
-import { ICON_MIME_TYPES, MAX_ICON_BYTES } from '../../shared/constants'
+import { EXTERNAL_ASSET_ID_PATTERN, ICON_MIME_TYPES, MAX_ICON_BYTES } from '../../shared/constants'
 import { resolveEntryAmounts, transactionDateIssue, type AmountField } from '../../shared/utils/numbers'
 import { normalizePhone } from '../../shared/utils/phone'
 import { apiError } from './http'
@@ -35,6 +35,16 @@ export function requireSymbol(input: string) {
     apiError(422, 'validation_error', { fields: { symbol: 'symbol' } })
   }
   return symbol
+}
+
+export function parseExternalAssetId(value: string | null | undefined) {
+  if (value == null) return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  if (!EXTERNAL_ASSET_ID_PATTERN.test(trimmed)) {
+    apiError(422, 'validation_error', { fields: { externalAssetId: 'external_id' } })
+  }
+  return trimmed
 }
 
 export function requireName(input: string, field = 'name', max = 64) {

@@ -7,7 +7,8 @@ import { assetQuotes, assets, initialCapital, tradeEntries, trades, users } from
 import { useDb } from './db'
 import { apiError, isUniqueViolation, requireUserId, requireUuid } from './http'
 import { hashUserPassword, verifyUserPassword, verifyUserPasswordOrDummy } from './password'
-import { optionalText, parseEntry, parseIcon, parseTransactionDate, requireName, requirePhone, requireSymbol } from './parse'
+import { getPriceProvider, MANUAL_PROVIDER_ID, quoteWriteFromProvider } from '../services/market'
+import { optionalText, parseEntry, parseExternalAssetId, parseIcon, parseTransactionDate, requireName, requirePhone, requireSymbol } from './parse'
 import { presentAsset, presentCapital, presentDashboard, presentTrade, presentUser } from './present'
 
 type PublicSessionUser = {
@@ -211,11 +212,13 @@ export async function createAsset(event: H3Event, input: {
   name: string
   isActive?: boolean
   icon?: string | null
+  externalAssetId?: string | null
 }) {
   const userId = await requireUserId(event)
   const symbol = requireSymbol(input.symbol)
   const name = requireName(input.name)
   const iconData = parseIcon(input.icon)
+  const externalAssetId = parseExternalAssetId(input.externalAssetId)
   const db = useDb()
   try {
     const [asset] = await db.insert(assets).values({
@@ -224,6 +227,7 @@ export async function createAsset(event: H3Event, input: {
       name,
       iconData,
       isActive: input.isActive ?? true,
+      externalAssetId,
     }).returning()
     if (!asset) apiError(500, 'generic')
     return presentAsset(asset, 0)
@@ -239,6 +243,7 @@ export async function updateAsset(event: H3Event, id: string, input: {
   name?: string
   isActive?: boolean
   icon?: string | null
+  externalAssetId?: string | null
 }) {
   const userId = await requireUserId(event)
   const assetId = requireUuid(id)
@@ -248,6 +253,7 @@ export async function updateAsset(event: H3Event, id: string, input: {
   if (input.name != null) patch.name = requireName(input.name)
   if (typeof input.isActive === 'boolean') patch.isActive = input.isActive
   if ('icon' in input) patch.iconData = parseIcon(input.icon)
+  if ('externalAssetId' in input) patch.externalAssetId = parseExternalAssetId(input.externalAssetId)
   const db = useDb()
   try {
     const [asset] = await db.update(assets).set(patch).where(and(eq(assets.id, assetId), eq(assets.userId, userId))).returning()
@@ -484,28 +490,36 @@ export async function saveQuote(event: H3Event, id: string, input: {
 }) {
   const userId = await requireUserId(event)
   const assetId = requireUuid(id)
-  await ownedAsset(userId, assetId)
-  const price = parsePositiveDecimal(input.priceUsd)
-  if (!price.ok) apiError(422, 'validation_error', { fields: { priceUsd: price.code } })
-  const rate = parsePositiveDecimal(input.usdTomanRate)
-  if (!rate.ok) apiError(422, 'validation_error', { fields: { usdTomanRate: rate.code } })
-  const quotedAt = parseTransactionDate(input.quotedAt)
+  const asset = await ownedAsset(userId, assetId)
+  const provider = getPriceProvider(MANUAL_PROVIDER_ID)
+  if (!provider) apiError(500, 'generic')
+  const priced = await provider.quote({
+    externalId: asset.externalAssetId,
+    manual: {
+      priceUsd: input.priceUsd,
+      usdTomanRate: input.usdTomanRate,
+      quotedAt: input.quotedAt,
+    },
+  })
+  if (!priced.ok) apiError(422, 'validation_error', { fields: { [priced.field ?? 'priceUsd']: priced.code } })
+  const write = quoteWriteFromProvider(priced.price, null)
+  if (!write) apiError(422, 'validation_error', { fields: { priceUsd: 'invalid_number' } })
   const db = useDb()
   await db.insert(assetQuotes).values({
     userId,
     assetId,
-    priceUsd: price.value.toFixed(12),
-    usdTomanRate: rate.value.toFixed(8),
-    source: 'manual',
-    quotedAt,
+    priceUsd: write.priceUsd,
+    usdTomanRate: write.usdTomanRate,
+    source: write.source,
+    quotedAt: write.quotedAt,
   }).onConflictDoUpdate({
     target: assetQuotes.assetId,
     set: {
       userId,
-      priceUsd: price.value.toFixed(12),
-      usdTomanRate: rate.value.toFixed(8),
-      source: 'manual',
-      quotedAt,
+      priceUsd: write.priceUsd,
+      usdTomanRate: write.usdTomanRate,
+      source: write.source,
+      quotedAt: write.quotedAt,
       updatedAt: new Date(),
     },
   })

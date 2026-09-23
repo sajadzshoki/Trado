@@ -52,7 +52,7 @@ Inside one trade, realized P/L is average cost on the overlapping quantity. Unre
 
 Initial capital stores a USD amount, the rate on that day, and the Toman equivalent. Current cash is that capital plus sold value minus bought value, in each currency. Current asset value uses the manual price. Portfolio value is cash plus asset value. Performance is `(portfolio − initial capital) / initial capital` in USD. A missing capital or a missing price leaves that figure blank. It is not shown as zero.
 
-A current price is one row per asset: USD price, the Toman rate used only to convert that price, source `manual`, and the date. Changing it does not rewrite entry totals, capital, or realized P/L. `server/services/prices.ts` is still the extension point for a later provider, which should upsert `asset_quotes` instead of being called while a page renders.
+A current price is one row per asset: USD price, the Toman rate used only to convert that price, a source, and the time. Changing it does not rewrite entry totals, capital, or realized P/L. The portfolio reads `asset_quotes`. It does not call a provider while a page renders.
 
 ## Database
 
@@ -60,7 +60,7 @@ A current price is one row per asset: USD price, the Toman rate used only to con
 | --- | --- |
 | `users` | Phone, password hash, name, locale, display currency |
 | `otp_challenges` | Reserved for a future OTP flow. Nothing writes to it yet |
-| `assets` | User-owned symbols, optional icon, active or inactive |
+| `assets` | User-owned symbols, optional icon, optional market id, active or inactive |
 | `trades` | A user-defined group of entries for one asset |
 | `trade_entries` | Buy or sell rows with USD and Toman amounts |
 | `initial_capital` | One capital record per user |
@@ -106,10 +106,18 @@ API:
 - `DELETE /api/entries/:id`
 - `GET /api/dashboard`
 
+## Market data
+
+User assets stay separate from any market catalog. An asset may store an optional external id, such as `bitcoin`. The journal does not require one, and it does not look that id up.
+
+`server/services/market.ts` defines `AssetProvider` and `PriceProvider`. `ManualPriceProvider` is the only provider. Saving a price goes through that interface and writes `asset_quotes` with source `manual`, the USD price, the Toman rate, and the time. `ManualAssetProvider` has no catalog, so search returns nothing rather than a made-up market list.
+
+A later provider can register with `registerPriceProvider` and `registerAssetProvider`, then upsert the same quote row. `linkedPriceProvider` returns null until that provider is registered. Nothing in the app calls an external market API.
+
 ## Not built yet
 
 - OTP send and verify
 - Changing a phone number
-- A market price provider. Manual quotes live in `asset_quotes`. `assets.price_provider`, `assets.external_asset_id`, and `server/services/prices.ts` are the extension point. Nothing calls a market API
+- A connected market provider. The interface is in place. No external API is called
 - Capital history
 - CSV export

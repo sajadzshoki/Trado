@@ -35,8 +35,9 @@ export const otpChallenges = pgTable('otp_challenges', {
 ])
 
 /**
- * priceProvider and externalAssetId are reserved for a later quote source.
- * No current route writes them. See server/services/prices.ts.
+ * A user's own asset. externalAssetId is an optional catalog id, such as
+ * "bitcoin". priceProvider stays empty until a registered provider is linked.
+ * Neither field is required. See server/services/market.ts.
  */
 export const assets = pgTable('assets', {
   id: uuid('id').primaryKey().defaultRandom(),

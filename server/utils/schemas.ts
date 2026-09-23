@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { MAX_ENTRY_NOTE_LENGTH, MAX_NAME_LENGTH, MAX_NOTE_LENGTH, MAX_PASSWORD_LENGTH, MAX_TITLE_LENGTH, MIN_PASSWORD_LENGTH } from '../../shared/constants'
+import { MAX_ENTRY_NOTE_LENGTH, MAX_EXTERNAL_ASSET_ID_LENGTH, MAX_NAME_LENGTH, MAX_NOTE_LENGTH, MAX_PASSWORD_LENGTH, MAX_TITLE_LENGTH, MIN_PASSWORD_LENGTH } from '../../shared/constants'
 
 export const registerSchema = z.object({
   phone: z.string().trim().min(1).max(32),
@@ -27,11 +27,14 @@ export const settingsSchema = z.object({
 
 const iconField = z.string().max(150_000).nullable().optional()
 
+const externalAssetIdField = z.string().trim().max(MAX_EXTERNAL_ASSET_ID_LENGTH).nullable().optional()
+
 export const assetSchema = z.object({
   symbol: z.string().trim().min(1).max(12),
   name: z.string().trim().min(1).max(64),
   isActive: z.boolean().optional(),
   icon: iconField,
+  externalAssetId: externalAssetIdField,
 })
 
 export const assetUpdateSchema = z.object({
@@ -39,6 +42,7 @@ export const assetUpdateSchema = z.object({
   name: z.string().trim().min(1).max(64).optional(),
   isActive: z.boolean().optional(),
   icon: iconField,
+  externalAssetId: externalAssetIdField,
 }).refine(value => Object.keys(value).length > 0)
 
 export const entrySchema = z.object({

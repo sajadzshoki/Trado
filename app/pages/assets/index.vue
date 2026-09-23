@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { z } from 'zod'
 import type { AssetRecord } from '~~/shared/types/journal'
-import { ICON_MIME_TYPES, MAX_ICON_BYTES } from '~~/shared/constants'
+import { EXTERNAL_ASSET_ID_PATTERN, ICON_MIME_TYPES, MAX_ICON_BYTES } from '~~/shared/constants'
 import { quoteUnitToman } from '~~/shared/utils/finance'
 import { fromDateTimeLocal, parsePositiveDecimal, toDateTimeLocal, trimDecimal } from '~~/shared/utils/numbers'
 
@@ -31,6 +31,7 @@ const state = reactive({
   name: '',
   isActive: true,
   icon: null as string | null,
+  externalAssetId: '',
 })
 
 const schema = computed(() => z.object({
@@ -44,6 +45,7 @@ function startEdit(asset: AssetRecord) {
   state.name = asset.name
   state.isActive = asset.isActive
   state.icon = asset.icon
+  state.externalAssetId = asset.externalAssetId ?? ''
   formError.value = ''
 }
 
@@ -52,6 +54,7 @@ function resetForm() {
   state.name = ''
   state.isActive = true
   state.icon = null
+  state.externalAssetId = ''
   editingId.value = null
   creating.value = false
 }
@@ -84,6 +87,11 @@ function onIcon(event: Event) {
 
 async function onSubmit() {
   formError.value = ''
+  const externalAssetId = state.externalAssetId.trim()
+  if (externalAssetId && !EXTERNAL_ASSET_ID_PATTERN.test(externalAssetId)) {
+    formError.value = t('validation.external_id')
+    return
+  }
   creating.value = true
   try {
     const body = {
@@ -91,6 +99,7 @@ async function onSubmit() {
       name: state.name,
       isActive: state.isActive,
       icon: state.icon,
+      externalAssetId: externalAssetId || null,
     }
     if (editingId.value) {
       await $fetch(`/api/assets/${editingId.value}`, { method: 'PATCH', body })
@@ -126,6 +135,11 @@ const quotePreview = computed(() => {
   if (!price.ok || !rate.ok) return null
   return quoteUnitToman(price.value.toString(), rate.value.toString())
 })
+
+function sourceLabel(source: string) {
+  if (source === 'manual') return t('assets.sourceManual')
+  return source
+}
 
 function startQuote(asset: AssetRecord) {
   quotingId.value = quotingId.value === asset.id ? null : asset.id
@@ -228,6 +242,12 @@ async function remove(id: string) {
                   · {{ t('assets.tradeCount', { count: asset.tradeCount }) }}
                 </p>
                 <p class="mt-1 text-xs text-dimmed">{{ t('assets.created', { date: format.date(asset.createdAt) }) }}</p>
+                <p v-if="asset.externalAssetId" class="mt-1 text-xs text-dimmed">
+                  {{ t('assets.externalIdValue', { id: asset.externalAssetId }) }}
+                </p>
+                <p v-if="asset.priceProvider" class="mt-1 text-xs text-dimmed">
+                  {{ t('assets.linkedProvider', { id: asset.priceProvider }) }}
+                </p>
               </div>
             </div>
             <div class="flex shrink-0 flex-col items-end gap-2 text-xs">
@@ -243,10 +263,8 @@ async function remove(id: string) {
             <template v-if="asset.quote">
               <p class="num mt-1 text-sm">{{ format.usd(asset.quote.priceUsd) }}</p>
               <p class="is-calculated num mt-1 text-xs text-muted">{{ format.toman(asset.quote.priceToman) }}</p>
-              <p class="mt-1 text-xs text-dimmed">
-                {{ t('assets.priceManual') }}
-                · {{ t('assets.quotedOn', { date: format.dateTime(asset.quote.quotedAt) }) }}
-              </p>
+              <p class="mt-1 text-xs text-dimmed">{{ t('assets.sourceLine', { source: sourceLabel(asset.quote.source) }) }}</p>
+              <p class="mt-1 text-xs text-dimmed">{{ t('assets.updated', { date: format.date(asset.quote.quotedAt) }) }}</p>
             </template>
             <p v-else class="mt-1 text-xs text-dimmed">{{ t('assets.noPrice') }}</p>
             <button type="button" class="mt-2 text-xs text-muted" @click="startQuote(asset)">
@@ -309,6 +327,9 @@ async function remove(id: string) {
         </UFormField>
         <UFormField :label="t('assets.name')" name="name" :hint="t('assets.nameHint')" required>
           <UInput v-model="state.name" autocomplete="off" class="w-full" />
+        </UFormField>
+        <UFormField :label="t('assets.externalId')" name="externalAssetId" :hint="t('assets.externalIdHint')">
+          <UInput v-model="state.externalAssetId" autocomplete="off" class="w-full" />
         </UFormField>
 
         <div>

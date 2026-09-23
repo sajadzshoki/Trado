@@ -26,6 +26,10 @@ export interface AssetRecord {
   icon: string | null
   isActive: boolean
   tradeCount: number
+  /** Optional catalog id. The journal works when this is null. */
+  externalAssetId: string | null
+  /** Linked price provider id, or null when prices are only the ones you enter. */
+  priceProvider: string | null
   quote: PriceQuoteRecord | null
   createdAt: string
 }

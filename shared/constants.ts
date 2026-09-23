@@ -6,6 +6,8 @@ export const MAX_NAME_LENGTH = 80
 export const MAX_TITLE_LENGTH = 80
 export const MAX_ASSET_NAME_LENGTH = 64
 export const MAX_SYMBOL_LENGTH = 12
+export const MAX_EXTERNAL_ASSET_ID_LENGTH = 64
+export const EXTERNAL_ASSET_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/
 export const MAX_ICON_BYTES = 80 * 1024
 export const ICON_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const
 

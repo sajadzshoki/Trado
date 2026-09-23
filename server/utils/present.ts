@@ -45,6 +45,8 @@ export function presentAsset(asset: AssetRow, tradeCount: number, quote: QuoteRo
     icon: asset.iconData,
     isActive: asset.isActive,
     tradeCount,
+    externalAssetId: asset.externalAssetId,
+    priceProvider: asset.priceProvider,
     quote: quote ? presentQuote(quote) : null,
     createdAt: iso(asset.createdAt),
   }
