@@ -192,74 +192,76 @@ async function deleteTrade() {
         </div>
       </header>
 
-      <section>
-        <h2 class="text-sm text-muted">{{ t('trades.summary') }}</h2>
-        <div class="mt-2">
-          <div class="flex items-baseline justify-between gap-4 border-b border-default py-3 text-sm">
-            <span class="text-muted">{{ t('trades.status') }}</span>
-            <span>{{ statusText(data) }}</span>
+      <section class="story-grid" :aria-label="t('trades.summary')">
+        <article class="story-card">
+          <p class="text-xs text-dimmed">{{ t('trades.boughtStory') }}</p>
+          <p class="num mt-2 text-lg text-highlighted">{{ format.qty(data.buyQuantity) }}</p>
+          <p class="mt-1 text-xs text-muted">{{ data.asset.symbol }}</p>
+          <div class="mt-3">
+            <MoneyText :usd="data.buyUsd" :toman="data.buyToman" size="sm" align="start" />
           </div>
-          <div class="flex items-baseline justify-between gap-4 border-b border-default py-3 text-sm">
-            <span class="text-muted">{{ t('trades.boughtQty') }}</span>
-            <bdi class="num">{{ format.qty(data.buyQuantity) }} {{ data.asset.symbol }}</bdi>
+        </article>
+        <article class="story-card">
+          <p class="text-xs text-dimmed">{{ t('trades.soldStory') }}</p>
+          <p class="num mt-2 text-lg text-highlighted">{{ format.qty(data.sellQuantity) }}</p>
+          <p class="mt-1 text-xs text-muted">{{ data.asset.symbol }}</p>
+          <div class="mt-3">
+            <MoneyText :usd="data.sellUsd" :toman="data.sellToman" size="sm" align="start" />
           </div>
-          <div class="flex items-baseline justify-between gap-4 border-b border-default py-3 text-sm">
-            <span class="text-muted">{{ t('trades.soldQty') }}</span>
-            <bdi class="num">{{ format.qty(data.sellQuantity) }} {{ data.asset.symbol }}</bdi>
-          </div>
-          <div class="flex items-baseline justify-between gap-4 border-b border-default py-3 text-sm">
-            <span class="text-muted">{{ t('trades.remainingQty') }}</span>
-            <bdi class="num">{{ format.qty(data.remainingQuantity) }} {{ data.asset.symbol }}</bdi>
-          </div>
-          <div v-if="data.averageBuyUsd" class="flex items-start justify-between gap-4 border-b border-default py-3">
-            <span class="text-sm text-muted">{{ t('trades.avgBuy') }}</span>
-            <span class="text-end">
-              <bdi class="num block text-sm">{{ format.usd(data.averageBuyUsd) }}</bdi>
-              <bdi v-if="data.averageBuyToman" class="num mt-1 block text-xs text-muted">{{ format.toman(data.averageBuyToman) }}</bdi>
-            </span>
-          </div>
-          <div class="flex items-start justify-between gap-4 border-b border-default py-3">
-            <span class="pt-1 text-sm text-muted">{{ t('trades.totalBuy') }}</span>
-            <MoneyText :usd="data.buyUsd" :toman="data.buyToman" size="sm" />
-          </div>
-          <div class="flex items-start justify-between gap-4 border-b border-default py-3">
-            <span class="pt-1 text-sm text-muted">{{ t('trades.totalSell') }}</span>
-            <MoneyText :usd="data.sellUsd" :toman="data.sellToman" size="sm" />
-          </div>
-          <div class="flex items-start justify-between gap-4 border-b border-default py-3">
-            <span class="pt-1 text-sm text-muted">{{ t('trades.realized') }}</span>
-            <MoneyText :usd="data.realizedPnlUsd" :toman="data.realizedPnlToman" signed size="sm" />
-          </div>
-          <div class="flex items-start justify-between gap-4 border-b border-default py-3">
-            <span class="pt-1 text-sm text-muted">{{ t('trades.unrealized') }}</span>
+        </article>
+        <article class="story-card">
+          <p class="text-xs text-dimmed">{{ t('trades.remainsStory') }}</p>
+          <p class="num mt-2 text-lg text-highlighted">{{ format.qty(data.remainingQuantity) }}</p>
+          <p class="mt-1 text-xs text-muted">{{ data.asset.symbol }}</p>
+          <div class="mt-3">
             <MoneyText
-              v-if="data.markAvailable && data.unrealizedPnlUsd != null && data.unrealizedPnlToman != null"
-              :usd="data.unrealizedPnlUsd"
-              :toman="data.unrealizedPnlToman"
+              v-if="data.currentValueUsd != null && data.currentValueToman != null"
+              :usd="data.currentValueUsd"
+              :toman="data.currentValueToman"
+              size="sm"
+              align="start"
+            />
+            <p v-else class="text-xs text-dimmed">{{ t('trades.priceMissing') }}</p>
+          </div>
+        </article>
+      </section>
+
+      <section class="mt-4 grid gap-3 sm:grid-cols-2">
+        <div class="surface p-4">
+          <p class="text-xs text-dimmed">{{ t('trades.realized') }}</p>
+          <div class="mt-2">
+            <MoneyText :usd="data.realizedPnlUsd" :toman="data.realizedPnlToman" signed size="sm" align="start" />
+          </div>
+        </div>
+        <div class="surface p-4">
+          <p class="text-xs text-dimmed">{{ data.totalPnlUsd != null ? t('trades.totalPnl') : t('trades.unrealized') }}</p>
+          <div class="mt-2">
+            <MoneyText
+              v-if="data.totalPnlUsd != null && data.totalPnlToman != null"
+              :usd="data.totalPnlUsd"
+              :toman="data.totalPnlToman"
               signed
               size="sm"
+              align="start"
             />
             <NuxtLink v-else :to="localePath('/assets')" class="text-sm text-muted underline underline-offset-4">
               {{ t('trades.setPrice') }}
             </NuxtLink>
           </div>
-          <div v-if="data.totalPnlUsd != null && data.totalPnlToman != null" class="flex items-start justify-between gap-4 border-b border-default py-3">
-            <span class="pt-1 text-sm text-muted">{{ t('trades.totalPnl') }}</span>
-            <MoneyText :usd="data.totalPnlUsd" :toman="data.totalPnlToman" signed size="sm" />
-          </div>
-          <div v-if="data.currentValueUsd != null && data.currentValueToman != null" class="flex items-start justify-between gap-4 border-b border-default py-3">
-            <span class="pt-1 text-sm text-muted">{{ t('trades.currentValue') }}</span>
-            <MoneyText :usd="data.currentValueUsd" :toman="data.currentValueToman" size="sm" />
-          </div>
         </div>
-        <p class="mt-3 text-xs leading-5 text-dimmed">{{ t('trades.methodNote') }}</p>
-        <p v-if="data.isOversold" class="mt-2 text-sm text-loss">
-          {{ t('trades.unmatchedSell') }}: <bdi class="num">{{ format.qty(data.unmatchedSellQuantity) }}</bdi>
-        </p>
       </section>
+      <p v-if="data.averageBuyUsd" class="mt-3 text-xs text-dimmed">
+        {{ t('trades.avgBuy') }}
+        <bdi class="num">{{ format.usd(data.averageBuyUsd) }}</bdi>
+        <bdi v-if="data.averageBuyToman" class="num"> · {{ format.toman(data.averageBuyToman) }}</bdi>
+      </p>
+      <p class="mt-2 text-xs leading-5 text-dimmed">{{ t('trades.methodNote') }}</p>
+      <p v-if="data.isOversold" class="mt-2 text-sm text-loss">
+        {{ t('trades.unmatchedSell') }}: <bdi class="num">{{ format.qty(data.unmatchedSellQuantity) }}</bdi>
+      </p>
 
       <section class="mt-10">
-        <h2 class="text-sm text-muted">{{ t('trades.detailEntries') }}</h2>
+        <h2 class="text-sm text-muted">{{ t('trades.timeline') }}</h2>
         <div class="mt-3 grid grid-cols-2 gap-2">
           <button type="button" class="choice" data-side="buy" :aria-pressed="showAdd && addSide === 'buy' && !editingId" @click="openAdd('buy')">
             {{ t('trades.addBuy') }}
@@ -284,7 +286,7 @@ async function deleteTrade() {
 
         <p v-if="!data.entries.length" class="mt-4 text-sm text-dimmed">{{ t('trades.noEntries') }}</p>
 
-        <article v-for="entry in data.entries" :key="entry.id" class="border-b border-default py-4">
+        <article v-for="entry in timeline" :key="entry.id" class="timeline-item" :data-side="entry.side">
           <div class="flex items-start justify-between gap-4">
             <div>
               <p class="text-sm font-medium" :class="entry.side === 'buy' ? 'text-gain' : 'text-loss'">
@@ -308,11 +310,6 @@ async function deleteTrade() {
               {{ t('trades.deleteEntry') }}
             </button>
           </div>
-          <p v-if="confirmDeleteEntry === entry.id" class="mt-3 text-sm text-muted">
-            {{ t('trades.deleteEntryConfirm') }}
-            <button type="button" class="ms-3 text-loss" :disabled="actionPending" @click="deleteEntry(entry.id)">{{ t('trades.confirmDelete') }}</button>
-            <button type="button" class="ms-3" @click="confirmDeleteEntry = null">{{ t('trades.cancel') }}</button>
-          </p>
           <div v-if="editing && editing.id === entry.id" class="mt-4">
             <EntryForm
               :symbol="data.asset.symbol"
@@ -350,17 +347,28 @@ async function deleteTrade() {
       </section>
 
       <section class="mt-12 border-t border-default pt-6">
-        <button type="button" class="text-sm text-loss" @click="confirmDeleteTrade = !confirmDeleteTrade">
+        <button type="button" class="text-sm text-loss" @click="confirmDeleteTrade = true">
           {{ t('trades.deleteTrade') }}
         </button>
-        <div v-if="confirmDeleteTrade" class="mt-3">
-          <p class="text-sm text-muted">{{ t('trades.deleteTradeConfirm') }}</p>
-          <div class="mt-3 flex gap-4">
-            <button type="button" class="text-sm text-loss" :disabled="actionPending" @click="deleteTrade">{{ t('trades.confirmDelete') }}</button>
-            <button type="button" class="text-sm text-muted" @click="confirmDeleteTrade = false">{{ t('trades.cancel') }}</button>
-          </div>
-        </div>
       </section>
+
+      <ConfirmDialog
+        v-model:open="confirmDeleteTrade"
+        :title="t('trades.deleteTrade')"
+        :body="t('trades.deleteTradeConfirm')"
+        :confirm-label="t('trades.confirmDelete')"
+        :pending="actionPending"
+        @confirm="deleteTrade"
+      />
+      <ConfirmDialog
+        :open="confirmDeleteEntry != null"
+        :title="t('trades.deleteEntry')"
+        :body="t('trades.deleteEntryConfirm')"
+        :confirm-label="t('trades.confirmDelete')"
+        :pending="actionPending"
+        @update:open="value => { if (!value) confirmDeleteEntry = null }"
+        @confirm="confirmDeleteEntry && deleteEntry(confirmDeleteEntry)"
+      />
 
       <p v-if="formError && !showAdd && !editingId" class="mt-6 text-sm text-loss" role="alert">{{ formError }}</p>
     </template>

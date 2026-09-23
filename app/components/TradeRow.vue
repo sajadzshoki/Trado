@@ -31,22 +31,18 @@ const status = computed(() => {
     <p v-if="trade.averageBuyUsd" class="num mt-1 text-xs text-dimmed">
       {{ t('trades.avgBuy') }} {{ format.usd(trade.averageBuyUsd) }}
     </p>
-    <div v-if="!trade.isEmpty" class="mt-3 space-y-3">
-      <div class="flex items-start justify-between gap-4">
-        <span class="pt-1 text-xs text-dimmed">{{ t('trades.realized') }}</span>
-        <MoneyText :usd="trade.realizedPnlUsd" :toman="trade.realizedPnlToman" signed size="sm" />
-      </div>
-      <div class="flex items-start justify-between gap-4">
-        <span class="pt-1 text-xs text-dimmed">{{ t('trades.unrealized') }}</span>
-        <MoneyText
-          v-if="trade.markAvailable && trade.unrealizedPnlUsd != null && trade.unrealizedPnlToman != null"
-          :usd="trade.unrealizedPnlUsd"
-          :toman="trade.unrealizedPnlToman"
-          signed
-          size="sm"
-        />
-        <span v-else class="text-xs text-dimmed">{{ t('trades.priceMissing') }}</span>
-      </div>
+    <div v-if="!trade.isEmpty" class="mt-3 flex items-start justify-between gap-4">
+      <span class="pt-1 text-xs text-dimmed">
+        {{ trade.totalPnlUsd != null ? t('trades.totalPnl') : t('trades.realized') }}
+      </span>
+      <MoneyText
+        v-if="trade.totalPnlUsd != null && trade.totalPnlToman != null"
+        :usd="trade.totalPnlUsd"
+        :toman="trade.totalPnlToman"
+        signed
+        size="sm"
+      />
+      <MoneyText v-else :usd="trade.realizedPnlUsd" :toman="trade.realizedPnlToman" signed size="sm" />
     </div>
   </NuxtLink>
 </template>

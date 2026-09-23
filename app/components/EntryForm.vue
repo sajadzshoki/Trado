@@ -13,6 +13,7 @@ const props = defineProps<{
   resetToken?: number
   error?: string
   availableLabel?: string
+  hideSide?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -166,7 +167,7 @@ function onSubmit() {
 
 <template>
   <UForm :schema="schema" :state="state" class="space-y-5" @submit="onSubmit">
-    <fieldset>
+    <fieldset v-if="!hideSide">
       <legend class="mb-2 text-sm text-muted">{{ t('trades.side') }}</legend>
       <div class="grid grid-cols-2 gap-2" role="group" :aria-label="t('trades.side')">
         <button type="button" class="choice" data-side="buy" :aria-pressed="state.side === 'buy'" @click="state.side = 'buy'">

@@ -79,6 +79,8 @@ export interface TradeSummary {
   isFlat: boolean
   isOversold: boolean
   status: TradeStatus
+  hasBuy: boolean
+  hasSell: boolean
   markAvailable: boolean
   unrealizedPnlUsd: string | null
   unrealizedPnlToman: string | null
@@ -117,7 +119,22 @@ export interface HoldingRecord {
   unrealizedPnlToman: string | null
   currentValueUsd: string | null
   currentValueToman: string | null
+  totalPnlUsd: string | null
+  totalPnlToman: string | null
   quote: PriceQuoteRecord | null
+}
+
+export interface ActivityRecord {
+  id: string
+  tradeId: string
+  tradeTitle: string | null
+  symbol: string
+  assetName: string
+  side: TradeSide
+  quantity: string
+  totalUsd: string
+  totalToman: string
+  transactedAt: string
 }
 
 export interface DashboardRecord {
@@ -138,6 +155,7 @@ export interface DashboardRecord {
   holdings: HoldingRecord[]
   openTrades: TradeSummary[]
   recentTrades: TradeSummary[]
+  recentActivity: ActivityRecord[]
   tradeCount: number
   oversoldCount: number
 }

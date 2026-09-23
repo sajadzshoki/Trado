@@ -40,6 +40,8 @@ OTP is not implemented. The `otp_challenges` table and `server/services/otp.ts` 
 
 A trade is a container you control. It can hold many buy and sell entries. The app does not match buys and sells across trades, and it does not use FIFO or LIFO.
 
+Recording a trade is asset, buy, values, then review. The first entry of a new trade is a buy. The trade list can be searched and filtered in the browser. Delete confirmations use a native dialog.
+
 Inside one trade, realized P/L uses average cost on the overlapping quantity only. If a trade sells more than it bought, the extra quantity is flagged instead of being matched to another trade.
 
 Each entry stores the side, quantity, USD unit price, USD total, the USD/Toman rate at that moment, the Toman total, the date, and an optional note. The entry form accepts any two of quantity, unit price, and total, and calculates the third with decimal arithmetic. Both currencies stay visible. USD leads unless settings choose Toman.

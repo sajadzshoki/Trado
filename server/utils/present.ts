@@ -1,4 +1,4 @@
-import type { AssetRecord, CapitalRecord, DashboardRecord, HoldingRecord, PriceQuoteRecord, PublicUser, TradeDetail, TradeEntryRecord, TradeSummary } from '../../shared/types/journal'
+import type { ActivityRecord, AssetRecord, CapitalRecord, DashboardRecord, HoldingRecord, PriceQuoteRecord, PublicUser, TradeDetail, TradeEntryRecord, TradeSummary } from '../../shared/types/journal'
 import { buildPortfolio, quoteUnitToman, valueTrade, type PortfolioAsset } from '../../shared/utils/finance'
 import { Decimal } from '../../shared/utils/numbers'
 import type { assetQuotes, assets, initialCapital, tradeEntries, trades, users } from '../database/schema'
@@ -116,6 +116,8 @@ export function presentTrade(
     entryCount: entries.length,
     ...valued.math,
     status: valued.status,
+    hasBuy: entries.some(entry => entry.side === 'buy'),
+    hasSell: entries.some(entry => entry.side === 'sell'),
     ...markFields(valued),
     createdAt: iso(trade.createdAt),
     updatedAt: iso(trade.updatedAt),
@@ -151,6 +153,8 @@ function presentHolding(holding: ReturnType<typeof buildPortfolio>['holdings'][n
     unrealizedPnlToman: holding.unrealized.available ? holding.unrealized.toman : null,
     currentValueUsd: holding.currentValue.available ? holding.currentValue.usd : null,
     currentValueToman: holding.currentValue.available ? holding.currentValue.toman : null,
+    totalPnlUsd: holding.unrealized.available ? new Decimal(holding.realizedPnlUsd).plus(holding.unrealized.usd).toFixed(8) : null,
+    totalPnlToman: holding.unrealized.available ? new Decimal(holding.realizedPnlToman).plus(holding.unrealized.toman).toFixed(4) : null,
     quote: holding.quote
       ? {
           priceUsd: holding.quote.priceUsd,
@@ -161,6 +165,30 @@ function presentHolding(holding: ReturnType<typeof buildPortfolio>['holdings'][n
         }
       : null,
   }
+}
+
+function recentActivity(trades: TradeRow[]): ActivityRecord[] {
+  return trades
+    .flatMap(trade => trade.entries.map(entry => ({
+      id: entry.id,
+      tradeId: trade.id,
+      tradeTitle: trade.title,
+      symbol: trade.asset.symbol,
+      assetName: trade.asset.name,
+      side: entry.side,
+      quantity: entry.quantity,
+      totalUsd: entry.totalUsd,
+      totalToman: entry.totalToman,
+      transactedAt: iso(entry.transactedAt),
+      createdAt: entry.createdAt,
+    })))
+    .sort((a, b) => {
+      const delta = new Date(b.transactedAt).getTime() - new Date(a.transactedAt).getTime()
+      if (delta !== 0) return delta
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    })
+    .slice(0, 8)
+    .map(({ createdAt: _createdAt, ...entry }) => entry)
 }
 
 /**
@@ -230,6 +258,7 @@ export function presentDashboard(input: {
     holdings: figures.holdings.map(presentHolding),
     openTrades: summaries.filter(trade => trade.status === 'open'),
     recentTrades: summaries.slice(0, 6),
+    recentActivity: recentActivity(input.trades),
     tradeCount: summaries.length,
     oversoldCount: figures.oversoldCount,
   }
