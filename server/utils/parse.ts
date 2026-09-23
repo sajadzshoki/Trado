@@ -1,10 +1,8 @@
 import type { TradeSide } from '../../shared/constants'
-import { parsePositiveDecimal, quoteEntry } from '../../shared/utils/numbers'
+import { ICON_MIME_TYPES, MAX_ICON_BYTES } from '../../shared/constants'
+import { resolveEntryAmounts, transactionDateIssue, type AmountField } from '../../shared/utils/numbers'
 import { normalizePhone } from '../../shared/utils/phone'
 import { apiError } from './http'
-
-const MIN_DATE = new Date('2000-01-01T00:00:00.000Z')
-const FUTURE_SKEW_MS = 15 * 60 * 1000
 
 export interface ParsedEntry {
   side: TradeSide
@@ -46,39 +44,53 @@ export function requireName(input: string, field = 'name', max = 64) {
   return name
 }
 
-function requireMoney(input: string, field: string) {
-  const parsed = parsePositiveDecimal(input)
-  if (!parsed.ok) apiError(422, 'validation_error', { fields: { [field]: parsed.code } })
-  return parsed.value
+export function parseTransactionDate(input: string) {
+  const issue = transactionDateIssue(input)
+  if (issue) apiError(422, 'validation_error', { fields: { transactedAt: issue } })
+  return new Date(input)
 }
 
-export function parseTransactionDate(input: string) {
-  const date = new Date(input)
-  if (Number.isNaN(date.getTime())) {
-    apiError(422, 'validation_error', { fields: { transactedAt: 'invalid_date' } })
+function imageSignature(bytes: Buffer, mime: string) {
+  if (mime === 'image/png') return bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  if (mime === 'image/jpeg') return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+  if (mime === 'image/webp') {
+    return bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP'
   }
-  if (date < MIN_DATE) apiError(422, 'validation_error', { fields: { transactedAt: 'date_past' } })
-  if (date.getTime() > Date.now() + FUTURE_SKEW_MS) {
-    apiError(422, 'validation_error', { fields: { transactedAt: 'date_future' } })
+  return false
+}
+
+export function parseIcon(value: string | null | undefined) {
+  if (value == null || value.trim() === '') return null
+  const match = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(value.trim())
+  if (!match || !ICON_MIME_TYPES.includes(match[1] as typeof ICON_MIME_TYPES[number])) {
+    apiError(422, 'validation_error', { fields: { icon: 'invalid_icon' } })
   }
-  return date
+  const bytes = Buffer.from(match[2], 'base64')
+  if (bytes.length < 16 || bytes.length > MAX_ICON_BYTES || !imageSignature(bytes, match[1]!)) {
+    apiError(422, 'validation_error', { fields: { icon: bytes.length > MAX_ICON_BYTES ? 'icon_too_large' : 'invalid_icon' } })
+  }
+  return `data:${match[1]};base64,${match[2]}`
 }
 
 export function parseEntry(input: {
   side: TradeSide
-  quantity: string
-  unitPriceUsd: string
+  quantity?: string | null
+  unitPriceUsd?: string | null
+  totalUsd?: string | null
+  solveFor?: AmountField
   usdTomanRate: string
   transactedAt: string
   note?: string | null
 }): ParsedEntry {
-  const quantity = requireMoney(input.quantity, 'quantity')
-  const unitPriceUsd = requireMoney(input.unitPriceUsd, 'unitPriceUsd')
-  const usdTomanRate = requireMoney(input.usdTomanRate, 'usdTomanRate')
-  const quoted = quoteEntry(quantity, unitPriceUsd, usdTomanRate)
+  const amounts = resolveEntryAmounts(input)
+  if (!amounts.ok) apiError(422, 'validation_error', { fields: { [amounts.field]: amounts.code } })
   return {
     side: input.side,
-    ...quoted,
+    quantity: amounts.value.quantity,
+    unitPriceUsd: amounts.value.unitPriceUsd,
+    totalUsd: amounts.value.totalUsd,
+    usdTomanRate: amounts.value.usdTomanRate,
+    totalToman: amounts.value.totalToman,
     transactedAt: parseTransactionDate(input.transactedAt),
     note: optionalText(input.note, 500, 'note'),
   }

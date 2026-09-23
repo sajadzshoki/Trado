@@ -1,4 +1,6 @@
 import type { DisplayCurrency, TradeSide } from '../constants'
+import type { AmountField } from '../utils/numbers'
+import type { TradeStatus } from '../utils/trade-math'
 
 export interface PublicUser {
   id: string
@@ -12,6 +14,8 @@ export interface AssetRecord {
   id: string
   symbol: string
   name: string
+  icon: string | null
+  isActive: boolean
   tradeCount: number
   createdAt: string
 }
@@ -64,6 +68,7 @@ export interface TradeSummary {
   isEmpty: boolean
   isFlat: boolean
   isOversold: boolean
+  status: TradeStatus
   createdAt: string
   updatedAt: string
   lastTransactedAt: string | null

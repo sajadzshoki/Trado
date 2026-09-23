@@ -2,11 +2,12 @@ import type { H3Event } from 'h3'
 import { and, asc, desc, eq } from 'drizzle-orm'
 import { MAX_NAME_LENGTH, MAX_NOTE_LENGTH, MAX_TITLE_LENGTH } from '../../shared/constants'
 import { Decimal, parsePositiveDecimal, quoteEntry } from '../../shared/utils/numbers'
+import { positionAfter, type PositionChange } from '../../shared/utils/trade-math'
 import { assets, initialCapital, tradeEntries, trades, users } from '../database/schema'
 import { useDb } from './db'
 import { apiError, isUniqueViolation, requireUserId, requireUuid } from './http'
 import { hashUserPassword, verifyUserPassword, verifyUserPasswordOrDummy } from './password'
-import { optionalText, parseEntry, parseTransactionDate, requireName, requirePhone, requireSymbol } from './parse'
+import { optionalText, parseEntry, parseIcon, parseTransactionDate, requireName, requirePhone, requireSymbol } from './parse'
 import { presentAsset, presentCapital, presentDashboard, presentTrade, presentUser } from './present'
 
 type PublicSessionUser = {
@@ -191,13 +192,31 @@ export async function listAssets(event: H3Event) {
   return rows.map(asset => presentAsset(asset, asset.trades.length))
 }
 
-export async function createAsset(event: H3Event, input: { symbol: string, name: string }) {
+function rejectIfShort(entries: { id: string, side: 'buy' | 'sell', quantity: string }[], change: PositionChange) {
+  if (positionAfter(entries, change).exceeded) {
+    apiError(422, 'insufficient_quantity', { fields: { quantity: 'insufficient_quantity' } })
+  }
+}
+
+export async function createAsset(event: H3Event, input: {
+  symbol: string
+  name: string
+  isActive?: boolean
+  icon?: string | null
+}) {
   const userId = await requireUserId(event)
   const symbol = requireSymbol(input.symbol)
   const name = requireName(input.name)
+  const iconData = parseIcon(input.icon)
   const db = useDb()
   try {
-    const [asset] = await db.insert(assets).values({ userId, symbol, name }).returning()
+    const [asset] = await db.insert(assets).values({
+      userId,
+      symbol,
+      name,
+      iconData,
+      isActive: input.isActive ?? true,
+    }).returning()
     if (!asset) apiError(500, 'generic')
     return presentAsset(asset, 0)
   }
@@ -207,19 +226,23 @@ export async function createAsset(event: H3Event, input: { symbol: string, name:
   }
 }
 
-export async function updateAsset(event: H3Event, id: string, input: { symbol: string, name: string }) {
+export async function updateAsset(event: H3Event, id: string, input: {
+  symbol?: string
+  name?: string
+  isActive?: boolean
+  icon?: string | null
+}) {
   const userId = await requireUserId(event)
   const assetId = requireUuid(id)
   await ownedAsset(userId, assetId)
-  const symbol = requireSymbol(input.symbol)
-  const name = requireName(input.name)
+  const patch: Partial<typeof assets.$inferInsert> = { updatedAt: new Date() }
+  if (input.symbol != null) patch.symbol = requireSymbol(input.symbol)
+  if (input.name != null) patch.name = requireName(input.name)
+  if (typeof input.isActive === 'boolean') patch.isActive = input.isActive
+  if ('icon' in input) patch.iconData = parseIcon(input.icon)
   const db = useDb()
   try {
-    const [asset] = await db.update(assets).set({
-      symbol,
-      name,
-      updatedAt: new Date(),
-    }).where(and(eq(assets.id, assetId), eq(assets.userId, userId))).returning()
+    const [asset] = await db.update(assets).set(patch).where(and(eq(assets.id, assetId), eq(assets.userId, userId))).returning()
     if (!asset) apiError(404, 'not_found')
     const tradeRows = await db.query.trades.findMany({
       where: eq(trades.assetId, assetId),
@@ -268,8 +291,10 @@ export async function createTrade(event: H3Event, input: {
 }) {
   const userId = await requireUserId(event)
   const assetId = requireUuid(input.assetId)
-  await ownedAsset(userId, assetId)
+  const asset = await ownedAsset(userId, assetId)
+  if (!asset.isActive) apiError(409, 'asset_inactive')
   const entry = parseEntry(input.entry)
+  rejectIfShort([], { op: 'add', side: entry.side, quantity: entry.quantity })
   const title = optionalText(input.title, MAX_TITLE_LENGTH, 'title')
   const notes = optionalText(input.notes, MAX_NOTE_LENGTH, 'notes')
   const db = useDb()
@@ -312,11 +337,12 @@ export async function updateTrade(event: H3Event, id: string, input: {
 }) {
   const userId = await requireUserId(event)
   const tradeId = requireUuid(id)
-  await ownedTrade(userId, tradeId)
+  const existing = await ownedTrade(userId, tradeId)
   const patch: Partial<typeof trades.$inferInsert> = { updatedAt: new Date() }
   if (input.assetId) {
     const assetId = requireUuid(input.assetId)
-    await ownedAsset(userId, assetId)
+    const asset = await ownedAsset(userId, assetId)
+    if (assetId !== existing.assetId && !asset.isActive) apiError(409, 'asset_inactive')
     patch.assetId = assetId
   }
   if ('title' in input) patch.title = optionalText(input.title, MAX_TITLE_LENGTH, 'title')
@@ -339,8 +365,9 @@ export async function removeTrade(event: H3Event, id: string) {
 export async function addEntry(event: H3Event, tradeIdParam: string, input: Parameters<typeof parseEntry>[0]) {
   const userId = await requireUserId(event)
   const tradeId = requireUuid(tradeIdParam)
-  await ownedTrade(userId, tradeId)
+  const existing = await ownedTrade(userId, tradeId)
   const entry = parseEntry(input)
+  rejectIfShort(existing.entries, { op: 'add', side: entry.side, quantity: entry.quantity })
   const db = useDb()
   await db.transaction(async (tx) => {
     await tx.insert(tradeEntries).values({
@@ -370,6 +397,8 @@ export async function updateEntry(event: H3Event, id: string, input: Parameters<
   })
   if (!existing) apiError(404, 'not_found')
   const entry = parseEntry(input)
+  const current = await ownedTrade(userId, existing.tradeId)
+  rejectIfShort(current.entries, { op: 'replace', id: entryId, side: entry.side, quantity: entry.quantity })
   await db.transaction(async (tx) => {
     await tx.update(tradeEntries).set({
       side: entry.side,
@@ -396,12 +425,13 @@ export async function removeEntry(event: H3Event, id: string) {
     where: and(eq(tradeEntries.id, entryId), eq(tradeEntries.userId, userId)),
   })
   if (!existing) apiError(404, 'not_found')
+  const current = await ownedTrade(userId, existing.tradeId)
+  rejectIfShort(current.entries, { op: 'remove', id: entryId })
   await db.transaction(async (tx) => {
     await tx.delete(tradeEntries).where(and(eq(tradeEntries.id, entryId), eq(tradeEntries.userId, userId)))
     await tx.update(trades).set({ updatedAt: new Date() }).where(eq(trades.id, existing.tradeId))
   })
-  const trade = await ownedTrade(userId, existing.tradeId)
-  return presentTrade(trade, true)
+  return presentTrade(await ownedTrade(userId, existing.tradeId), true)
 }
 
 export async function getDashboard(event: H3Event) {

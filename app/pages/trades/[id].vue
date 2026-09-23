@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import type { AssetRecord, EntryPayload, TradeDetail } from '~~/shared/types/journal'
+import type { AssetRecord, EntryPayload, TradeDetail, TradeSide } from '~~/shared/types/journal'
+import { positionAfter } from '~~/shared/utils/trade-math'
+import { resolveEntryAmounts } from '~~/shared/utils/numbers'
 
 definePageMeta({ middleware: 'authenticated' })
 
@@ -17,6 +19,7 @@ useHead({ title: () => data.value ? (data.value.title || data.value.asset.symbol
 const { data: assets } = await useFetch<AssetRecord[]>('/api/assets')
 
 const showAdd = ref(false)
+const addSide = ref<TradeSide>('buy')
 const editingId = ref<string | null>(null)
 const confirmDeleteTrade = ref(false)
 const confirmDeleteEntry = ref<string | null>(null)
@@ -24,6 +27,7 @@ const actionPending = ref(false)
 const formError = ref('')
 const resetToken = ref(0)
 const detailsSaved = ref(false)
+const openedEmpty = ref(false)
 
 const details = reactive({
   title: '',
@@ -36,10 +40,51 @@ watch(data, (trade) => {
   details.title = trade.title ?? ''
   details.notes = trade.notes ?? ''
   details.assetId = trade.asset.id
-  if (!trade.entries.length) showAdd.value = true
+  if (!trade.entries.length && !openedEmpty.value) {
+    openedEmpty.value = true
+    showAdd.value = true
+    addSide.value = 'buy'
+  }
 }, { immediate: true })
 
 const editing = computed(() => data.value?.entries.find(entry => entry.id === editingId.value) ?? null)
+const assetIcon = computed(() => assets.value?.find(asset => asset.id === data.value?.asset.id)?.icon ?? null)
+
+const assetOptions = computed(() => {
+  const rows = assets.value ?? []
+  return rows
+    .filter(asset => asset.isActive || asset.id === details.assetId)
+    .map(asset => ({
+      label: asset.isActive
+        ? `${asset.symbol} · ${asset.name}`
+        : `${asset.symbol} · ${asset.name} · ${t('assets.inactive')}`,
+      value: asset.id,
+    }))
+})
+
+function statusText(trade: TradeDetail) {
+  if (trade.isOversold) return t('trades.oversold')
+  if (trade.status === 'closed') return t('trades.statusClosed')
+  if (trade.status === 'open') return t('trades.statusOpen')
+  return t('trades.noEntries')
+}
+
+function availableLabel() {
+  if (!data.value) return ''
+  return t('trades.available', {
+    qty: `${format.qty(data.value.remainingQuantity)} ${data.value.asset.symbol}`,
+  })
+}
+
+function exceeds(entry: EntryPayload, replacingId?: string) {
+  if (!data.value) return false
+  const solved = resolveEntryAmounts(entry)
+  if (!solved.ok) return false
+  const change = replacingId
+    ? { op: 'replace' as const, id: replacingId, side: entry.side, quantity: solved.value.quantity }
+    : { op: 'add' as const, side: entry.side, quantity: solved.value.quantity }
+  return positionAfter(data.value.entries, change).exceeded
+}
 
 async function run(work: () => Promise<unknown>) {
   formError.value = ''
@@ -56,16 +101,31 @@ async function run(work: () => Promise<unknown>) {
   }
 }
 
+function openAdd(side: TradeSide) {
+  addSide.value = side
+  editingId.value = null
+  showAdd.value = true
+  formError.value = ''
+}
+
 function addEntry(entry: EntryPayload) {
+  if (exceeds(entry)) {
+    formError.value = t('validation.insufficient_quantity')
+    return
+  }
   return run(async () => {
     await $fetch(`/api/trades/${tradeId.value}/entries`, { method: 'POST', body: entry })
     resetToken.value += 1
-    showAdd.value = false
+    showAdd.value = true
   })
 }
 
 function saveEntry(entry: EntryPayload) {
   if (!editingId.value) return
+  if (exceeds(entry, editingId.value)) {
+    formError.value = t('validation.insufficient_quantity')
+    return
+  }
   const id = editingId.value
   return run(async () => {
     await $fetch(`/api/entries/${id}`, { method: 'PATCH', body: entry })
@@ -108,13 +168,6 @@ async function deleteTrade() {
     actionPending.value = false
   }
 }
-
-function statusLabel(trade: TradeDetail) {
-  if (trade.isEmpty) return t('trades.noEntries')
-  if (trade.isOversold) return t('trades.oversold')
-  if (trade.isFlat) return t('trades.flat')
-  return t('trades.remaining', { qty: format.qty(trade.remainingQuantity) })
-}
 </script>
 
 <template>
@@ -128,32 +181,39 @@ function statusLabel(trade: TradeDetail) {
     </div>
 
     <template v-else-if="data">
-      <header class="mt-6 mb-8">
-        <p class="kicker">{{ statusLabel(data) }}</p>
-        <h1 class="mt-2 text-[1.7rem] font-medium tracking-tight text-highlighted">
-          {{ data.title || data.asset.symbol }}
-        </h1>
-        <p class="mt-2 text-sm text-muted">{{ data.asset.name }} · {{ data.asset.symbol }}</p>
+      <header class="mt-6 mb-8 flex items-start gap-3">
+        <AssetMark :symbol="data.asset.symbol" :icon="assetIcon" />
+        <div class="min-w-0">
+          <p class="kicker">{{ statusText(data) }}</p>
+          <h1 class="mt-2 text-[1.7rem] font-medium tracking-tight text-highlighted">
+            {{ data.title || data.asset.symbol }}
+          </h1>
+          <p class="mt-2 text-sm text-muted">{{ data.asset.name }} · {{ data.asset.symbol }}</p>
+        </div>
       </header>
 
       <section>
         <h2 class="text-sm text-muted">{{ t('trades.summary') }}</h2>
         <div class="mt-2">
+          <div class="flex items-baseline justify-between gap-4 border-b border-default py-3 text-sm">
+            <span class="text-muted">{{ t('trades.status') }}</span>
+            <span>{{ statusText(data) }}</span>
+          </div>
           <div class="flex items-start justify-between gap-4 border-b border-default py-3">
-            <span class="text-sm text-muted">{{ t('dashboard.realizedPnl') }}</span>
-            <MoneyText :usd="data.realizedPnlUsd" :toman="data.realizedPnlToman" signed />
+            <span class="pt-1 text-sm text-muted">{{ t('trades.invested') }}</span>
+            <MoneyText :usd="data.buyUsd" :toman="data.buyToman" size="sm" />
           </div>
-          <div class="flex items-baseline justify-between gap-4 border-b border-default py-3 text-sm">
-            <span class="text-muted">{{ t('trades.boughtQty') }}</span>
-            <bdi class="num">{{ format.qty(data.buyQuantity) }} {{ data.asset.symbol }}</bdi>
-          </div>
-          <div class="flex items-baseline justify-between gap-4 border-b border-default py-3 text-sm">
-            <span class="text-muted">{{ t('trades.soldQty') }}</span>
-            <bdi class="num">{{ format.qty(data.sellQuantity) }} {{ data.asset.symbol }}</bdi>
+          <div class="flex items-start justify-between gap-4 border-b border-default py-3">
+            <span class="pt-1 text-sm text-muted">{{ t('trades.soldAmount') }}</span>
+            <MoneyText :usd="data.sellUsd" :toman="data.sellToman" size="sm" />
           </div>
           <div class="flex items-baseline justify-between gap-4 border-b border-default py-3 text-sm">
             <span class="text-muted">{{ t('trades.remainingQty') }}</span>
             <bdi class="num">{{ format.qty(data.remainingQuantity) }} {{ data.asset.symbol }}</bdi>
+          </div>
+          <div class="flex items-start justify-between gap-4 border-b border-default py-3">
+            <span class="pt-1 text-sm text-muted">{{ t('trades.profit') }}</span>
+            <MoneyText :usd="data.realizedPnlUsd" :toman="data.realizedPnlToman" signed size="sm" />
           </div>
           <div v-if="data.averageBuyUsd" class="flex items-start justify-between gap-4 border-b border-default py-3">
             <span class="text-sm text-muted">{{ t('trades.avgBuy') }}</span>
@@ -162,57 +222,53 @@ function statusLabel(trade: TradeDetail) {
               <bdi v-if="data.averageBuyToman" class="num mt-1 block text-xs text-muted">{{ format.toman(data.averageBuyToman) }}</bdi>
             </span>
           </div>
-          <div v-if="data.averageSellUsd" class="flex items-start justify-between gap-4 border-b border-default py-3">
-            <span class="text-sm text-muted">{{ t('trades.avgSell') }}</span>
-            <span class="text-end">
-              <bdi class="num block text-sm">{{ format.usd(data.averageSellUsd) }}</bdi>
-              <bdi v-if="data.averageSellToman" class="num mt-1 block text-xs text-muted">{{ format.toman(data.averageSellToman) }}</bdi>
-            </span>
-          </div>
-          <div v-if="data.isOversold" class="flex items-baseline justify-between gap-4 border-b border-default py-3 text-sm">
-            <span class="text-muted">{{ t('trades.unmatchedSell') }}</span>
-            <bdi class="num text-loss">{{ format.qty(data.unmatchedSellQuantity) }}</bdi>
-          </div>
         </div>
         <p class="mt-3 text-xs leading-5 text-dimmed">{{ t('trades.methodNote') }}</p>
+        <p v-if="data.isOversold" class="mt-2 text-sm text-loss">
+          {{ t('trades.unmatchedSell') }}: <bdi class="num">{{ format.qty(data.unmatchedSellQuantity) }}</bdi>
+        </p>
       </section>
 
       <section class="mt-10">
-        <div class="mb-2 flex items-center justify-between">
-          <h2 class="text-sm text-muted">{{ t('trades.detailEntries') }}</h2>
-          <button type="button" class="text-sm text-highlighted" @click="showAdd = !showAdd; editingId = null">
-            {{ t('trades.addEntry') }}
+        <h2 class="text-sm text-muted">{{ t('trades.detailEntries') }}</h2>
+        <div class="mt-3 grid grid-cols-2 gap-2">
+          <button type="button" class="choice" data-side="buy" :aria-pressed="showAdd && addSide === 'buy' && !editingId" @click="openAdd('buy')">
+            {{ t('trades.addBuy') }}
+          </button>
+          <button type="button" class="choice" data-side="sell" :aria-pressed="showAdd && addSide === 'sell' && !editingId" @click="openAdd('sell')">
+            {{ t('trades.addSell') }}
           </button>
         </div>
 
-        <div v-if="showAdd" class="mb-8 border-b border-default pb-8">
+        <div v-if="showAdd && !editingId" class="mt-6 border-b border-default pb-8">
           <EntryForm
             :symbol="data.asset.symbol"
             :pending="actionPending"
             :submit-label="t('trades.saveEntry')"
+            :preset-side="addSide"
             :reset-token="resetToken"
+            :error="formError"
+            :available-label="addSide === 'sell' ? availableLabel() : ''"
             @submit="addEntry"
           />
         </div>
 
-        <p v-if="!data.entries.length" class="text-sm text-dimmed">{{ t('trades.noEntries') }}</p>
+        <p v-if="!data.entries.length" class="mt-4 text-sm text-dimmed">{{ t('trades.noEntries') }}</p>
 
         <article v-for="entry in data.entries" :key="entry.id" class="border-b border-default py-4">
           <div class="flex items-start justify-between gap-4">
             <div>
-              <p class="text-sm">
-                <span :class="entry.side === 'buy' ? 'text-gain' : 'text-loss'">
-                  {{ entry.side === 'buy' ? t('trades.buy') : t('trades.sell') }}
-                </span>
-                <bdi class="num ms-2">{{ format.qty(entry.quantity) }} {{ data.asset.symbol }}</bdi>
+              <p class="text-sm font-medium" :class="entry.side === 'buy' ? 'text-gain' : 'text-loss'">
+                {{ entry.side === 'buy' ? t('trades.buy') : t('trades.sell') }}
               </p>
+              <p class="num mt-1 text-sm">{{ format.qty(entry.quantity) }} {{ data.asset.symbol }}</p>
+              <p class="num mt-1 text-xs text-dimmed">{{ t('trades.unitPriceShort') }} {{ format.usd(entry.unitPriceUsd) }}</p>
               <p class="num mt-1 text-xs text-dimmed">{{ format.dateTime(entry.transactedAt) }}</p>
               <p v-if="entry.note" class="mt-2 text-sm text-muted">{{ entry.note }}</p>
             </div>
             <div class="text-end">
               <bdi class="num block text-sm">{{ format.usd(entry.totalUsd) }}</bdi>
               <bdi class="num mt-1 block text-xs text-muted">{{ format.toman(entry.totalToman) }}</bdi>
-              <p class="num mt-1 text-xs text-dimmed">{{ format.usd(entry.unitPriceUsd) }}</p>
             </div>
           </div>
           <div class="mt-3 flex gap-4 text-xs">
@@ -234,6 +290,7 @@ function statusLabel(trade: TradeDetail) {
               :pending="actionPending"
               :submit-label="t('trades.saveEntry')"
               :initial="entry"
+              :error="formError"
               @submit="saveEntry"
             />
           </div>
@@ -245,11 +302,7 @@ function statusLabel(trade: TradeDetail) {
         <form class="mt-4 space-y-4" @submit.prevent="saveDetails">
           <label class="block text-sm">
             <span class="mb-2 block text-muted">{{ t('trades.asset') }}</span>
-            <USelect
-              v-model="details.assetId"
-              :items="(assets || []).map(asset => ({ label: `${asset.symbol} · ${asset.name}`, value: asset.id }))"
-              class="w-full"
-            />
+            <USelect v-model="details.assetId" :items="assetOptions" class="w-full" />
           </label>
           <label class="block text-sm">
             <span class="mb-2 block text-muted">{{ t('trades.titleLabel') }}</span>
@@ -280,7 +333,7 @@ function statusLabel(trade: TradeDetail) {
         </div>
       </section>
 
-      <p v-if="formError" class="mt-6 text-sm text-loss" role="alert">{{ formError }}</p>
+      <p v-if="formError && !showAdd && !editingId" class="mt-6 text-sm text-loss" role="alert">{{ formError }}</p>
     </template>
   </div>
 </template>

@@ -46,10 +46,10 @@ const { data, pending, error, refresh } = await useFetch<TradeSummary[]>('/api/t
           <p class="mt-1 text-xs text-dimmed">
             {{ t('trades.entryCount', { count: trade.entryCount }) }}
             ·
-            <template v-if="trade.isEmpty">{{ t('trades.noEntries') }}</template>
-            <template v-else-if="trade.isOversold">{{ t('trades.oversold') }}</template>
-            <template v-else-if="trade.isFlat">{{ t('trades.flat') }}</template>
-            <template v-else>{{ t('trades.remaining', { qty: format.qty(trade.remainingQuantity) }) }}</template>
+            <template v-if="trade.isOversold">{{ t('trades.oversold') }}</template>
+            <template v-else-if="trade.status === 'closed'">{{ t('trades.statusClosed') }}</template>
+            <template v-else-if="trade.status === 'open'">{{ t('trades.statusOpen') }} · {{ t('trades.remaining', { qty: format.qty(trade.remainingQuantity) }) }}</template>
+            <template v-else>{{ t('trades.noEntries') }}</template>
           </p>
           <p v-if="trade.lastTransactedAt" class="num mt-1 text-xs text-dimmed">
             {{ format.dateTime(trade.lastTransactedAt) }}

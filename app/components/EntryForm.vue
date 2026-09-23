@@ -2,14 +2,17 @@
 import { z } from 'zod'
 import type { EntryPayload, TradeSide } from '~~/shared/types/journal'
 import { LAST_RATE_KEY } from '~~/shared/constants'
-import { fromDateTimeLocal, formatQuantity, formatRate, formatToman, formatUsd, parsePositiveDecimal, quoteEntry, toDateTimeLocal, trimDecimal } from '~~/shared/utils/numbers'
+import { AMOUNT_FIELDS, formatInputDecimal, formatToman, fromDateTimeLocal, parsePositiveDecimal, solveAmount, toDateTimeLocal, transactionDateIssue, trimDecimal, type AmountField } from '~~/shared/utils/numbers'
 
 const props = defineProps<{
   symbol?: string
   pending?: boolean
   submitLabel: string
-  initial?: EntryPayload | null
+  initial?: (EntryPayload & { totalUsd?: string | null }) | null
+  presetSide?: TradeSide
   resetToken?: number
+  error?: string
+  availableLabel?: string
 }>()
 
 const emit = defineEmits<{
@@ -18,24 +21,32 @@ const emit = defineEmits<{
 
 const { t, locale } = useI18n()
 const localError = ref('')
+const derived = ref<AmountField>('totalUsd')
+const recent = ref<AmountField[]>(['quantity', 'unitPriceUsd'])
+let writing = false
 
 const state = reactive({
   side: 'buy' as TradeSide,
   quantity: '',
   unitPriceUsd: '',
+  totalUsd: '',
   usdTomanRate: '',
   transactedAt: toDateTimeLocal(),
   note: '',
 })
 
-function applyInitial(initial?: EntryPayload | null) {
+function applyInitial(initial?: (EntryPayload & { totalUsd?: string | null }) | null) {
+  state.side = initial?.side ?? props.presetSide ?? 'buy'
   if (!initial) return
-  state.side = initial.side
   state.quantity = trimDecimal(initial.quantity)
   state.unitPriceUsd = trimDecimal(initial.unitPriceUsd)
+  state.totalUsd = initial.totalUsd ? trimDecimal(initial.totalUsd) : ''
   state.usdTomanRate = trimDecimal(initial.usdTomanRate)
   state.transactedAt = toDateTimeLocal(new Date(initial.transactedAt))
   state.note = initial.note ?? ''
+  derived.value = 'totalUsd'
+  recent.value = ['quantity', 'unitPriceUsd']
+  if (!state.totalUsd) writeDerived()
 }
 
 applyInitial(props.initial)
@@ -47,54 +58,96 @@ onMounted(() => {
 })
 
 watch(() => props.initial, value => applyInitial(value))
+watch(() => props.presetSide, (side) => {
+  if (side && !props.initial) state.side = side
+})
 
 watch(() => props.resetToken, () => {
   state.quantity = ''
   state.unitPriceUsd = ''
+  state.totalUsd = ''
   state.note = ''
   state.transactedAt = toDateTimeLocal()
+  state.side = props.presetSide ?? state.side
+  derived.value = 'totalUsd'
+  recent.value = ['quantity', 'unitPriceUsd']
   localError.value = ''
 })
 
+watch(locale, () => writeDerived())
+
 const schema = computed(() => z.object({
-  quantity: z.string().trim().min(1, t('validation.required')),
-  unitPriceUsd: z.string().trim().min(1, t('validation.required')),
+  quantity: z.string().optional(),
+  unitPriceUsd: z.string().optional(),
+  totalUsd: z.string().optional(),
   usdTomanRate: z.string().trim().min(1, t('validation.required')),
   transactedAt: z.string().min(1, t('validation.required')),
   note: z.string().max(500, t('validation.too_long')).optional(),
 }))
 
-const preview = computed(() => {
-  const quantity = parsePositiveDecimal(state.quantity)
-  const price = parsePositiveDecimal(state.unitPriceUsd)
-  const rate = parsePositiveDecimal(state.usdTomanRate)
-  if (!quantity.ok || !price.ok || !rate.ok) return null
-  const quoted = quoteEntry(quantity.value, price.value, rate.value)
-  const tag = locale.value === 'fa' ? 'fa-IR' : 'en-US'
-  return {
-    quantity: formatQuantity(quoted.quantity, tag),
-    unit: formatUsd(quoted.unitPriceUsd, tag),
-    totalUsd: formatUsd(quoted.totalUsd, tag),
-    rate: formatRate(quoted.usdTomanRate, tag),
-    totalToman: formatToman(quoted.totalToman, tag),
+function onAmount(field: AmountField, value: string | number) {
+  const text = String(value ?? '')
+  state[field] = text
+  if (writing) return
+  const without = recent.value.filter(item => item !== field)
+  recent.value = [...without, field].slice(-2)
+  derived.value = AMOUNT_FIELDS.find(item => !recent.value.includes(item)) ?? 'totalUsd'
+  writeDerived()
+}
+
+function writeDerived() {
+  const target = derived.value
+  const sources = AMOUNT_FIELDS.filter(item => item !== target)
+  const left = parsePositiveDecimal(state[sources[0]!])
+  const right = parsePositiveDecimal(state[sources[1]!])
+  if (!left.ok || !right.ok) {
+    if (state[target]) {
+      writing = true
+      state[target] = ''
+      writing = false
+    }
+    return
   }
+  const next = formatInputDecimal(solveAmount(sources[0]!, left.value, sources[1]!, right.value), locale.value)
+  if (state[target] === next) return
+  writing = true
+  state[target] = next
+  writing = false
+}
+
+const tomanPreview = computed(() => {
+  const total = parsePositiveDecimal(state.totalUsd)
+  const rate = parsePositiveDecimal(state.usdTomanRate)
+  if (!total.ok || !rate.ok) return null
+  return formatToman(total.value.mul(rate.value).toFixed(4), locale.value === 'fa' ? 'fa-IR' : 'en-US')
 })
+
+function fieldLabel(field: AmountField) {
+  if (field === 'quantity') return t('trades.quantity')
+  if (field === 'unitPriceUsd') return t('trades.unitPrice')
+  return t('trades.total')
+}
 
 function onSubmit() {
   localError.value = ''
-  const fields = [
-    parsePositiveDecimal(state.quantity),
-    parsePositiveDecimal(state.unitPriceUsd),
-    parsePositiveDecimal(state.usdTomanRate),
-  ]
-  const invalid = fields.find(field => !field.ok)
-  if (invalid && !invalid.ok) {
-    localError.value = t(`validation.${invalid.code}`)
+  writeDerived()
+  const filled = AMOUNT_FIELDS.filter(field => parsePositiveDecimal(state[field]).ok)
+  if (filled.length < 2) {
+    localError.value = t('validation.need_two')
     return
   }
-  const transactedAt = fromDateTimeLocal(state.transactedAt)
-  if (!transactedAt) {
-    localError.value = t('validation.invalid_date')
+  const rate = parsePositiveDecimal(state.usdTomanRate)
+  if (!rate.ok) {
+    localError.value = t(`validation.${rate.code}`)
+    return
+  }
+  const dateIssue = transactionDateIssue(fromDateTimeLocal(state.transactedAt) ?? '')
+  if (dateIssue) {
+    localError.value = t(`validation.${dateIssue}`)
+    return
+  }
+  if (state.note.trim().length > 500) {
+    localError.value = t('validation.too_long')
     return
   }
   localStorage.setItem(LAST_RATE_KEY, state.usdTomanRate.trim())
@@ -102,8 +155,10 @@ function onSubmit() {
     side: state.side,
     quantity: state.quantity,
     unitPriceUsd: state.unitPriceUsd,
+    totalUsd: state.totalUsd,
+    solveFor: derived.value,
     usdTomanRate: state.usdTomanRate,
-    transactedAt,
+    transactedAt: fromDateTimeLocal(state.transactedAt)!,
     note: state.note.trim() || null,
   })
 }
@@ -121,19 +176,33 @@ function onSubmit() {
           {{ t('trades.sell') }}
         </button>
       </div>
+      <p v-if="state.side === 'sell' && availableLabel" class="mt-2 text-xs text-dimmed">
+        {{ availableLabel }}
+      </p>
     </fieldset>
 
-    <UFormField :label="t('trades.quantity')" name="quantity" required>
-      <UInput v-model="state.quantity" inputmode="decimal" autocomplete="off" class="w-full" />
-    </UFormField>
+    <p class="text-xs leading-5 text-dimmed">{{ t('trades.solveHint') }}</p>
 
-    <UFormField :label="t('trades.unitPrice')" name="unitPriceUsd" required>
-      <UInput v-model="state.unitPriceUsd" inputmode="decimal" autocomplete="off" class="w-full" />
-    </UFormField>
+    <div v-for="field in AMOUNT_FIELDS" :key="field" :class="{ 'is-calculated': derived === field }">
+      <UFormField :label="fieldLabel(field)" :name="field" :hint="derived === field ? t('trades.calculated') : undefined">
+        <UInput
+          :model-value="state[field]"
+          inputmode="decimal"
+          autocomplete="off"
+          class="w-full"
+          @update:model-value="onAmount(field, $event)"
+        />
+      </UFormField>
+    </div>
 
     <UFormField :label="t('trades.rate')" name="usdTomanRate" :hint="t('trades.rateHint')" required>
       <UInput v-model="state.usdTomanRate" inputmode="decimal" autocomplete="off" class="w-full" />
     </UFormField>
+
+    <div v-if="tomanPreview" class="is-calculated py-1" aria-live="polite">
+      <p class="text-xs text-dimmed">{{ t('trades.tomanValue') }} · {{ t('trades.calculated') }}</p>
+      <p class="num mt-1 text-sm text-muted">{{ tomanPreview }}</p>
+    </div>
 
     <UFormField :label="t('trades.date')" name="transactedAt" required>
       <UInput v-model="state.transactedAt" type="datetime-local" class="w-full" />
@@ -143,20 +212,7 @@ function onSubmit() {
       <UTextarea v-model="state.note" :rows="2" class="w-full" />
     </UFormField>
 
-    <div v-if="preview" class="rule py-4" aria-live="polite">
-      <p class="kicker mb-3">{{ t('trades.preview') }}</p>
-      <p class="num text-sm leading-6 text-highlighted">
-        {{ preview.quantity }} {{ symbol || '' }} {{ t('money.times') }} {{ preview.unit }} {{ t('money.equals') }} {{ preview.totalUsd }}
-      </p>
-      <p class="num mt-1 text-sm leading-6 text-muted">
-        {{ t('trades.rate') }}: {{ preview.rate }}
-      </p>
-      <p class="num mt-1 text-sm leading-6 text-muted">
-        {{ t('trades.tomanValue') }}: {{ preview.totalToman }}
-      </p>
-    </div>
-
-    <p v-if="localError" class="text-sm text-loss" role="alert">{{ localError }}</p>
+    <p v-if="localError || error" class="text-sm text-loss" role="alert">{{ localError || error }}</p>
 
     <UButton type="submit" color="neutral" class="w-full justify-center" :loading="pending">
       {{ submitLabel }}

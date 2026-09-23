@@ -1,5 +1,5 @@
 import type { AssetRecord, CapitalRecord, DashboardRecord, OpenPosition, PublicUser, TradeDetail, TradeEntryRecord, TradeSummary } from '../../shared/types/journal'
-import { summarizeEntries } from '../../shared/utils/trade-math'
+import { summarizeEntries, tradeStatus } from '../../shared/utils/trade-math'
 import type { assets, initialCapital, tradeEntries, trades, users } from '../database/schema'
 import { Decimal } from '../../shared/utils/numbers'
 
@@ -31,6 +31,8 @@ export function presentAsset(asset: AssetRow, tradeCount: number): AssetRecord {
     id: asset.id,
     symbol: asset.symbol,
     name: asset.name,
+    icon: asset.iconData,
+    isActive: asset.isActive,
     tradeCount,
     createdAt: iso(asset.createdAt),
   }
@@ -83,6 +85,7 @@ export function presentTrade(trade: TradeRow, withEntries: boolean): TradeSummar
     },
     entryCount: entries.length,
     ...math,
+    status: tradeStatus(entries.length, math.buyQuantity, math.sellQuantity),
     createdAt: iso(trade.createdAt),
     updatedAt: iso(trade.updatedAt),
     lastTransactedAt: last ? iso(last.transactedAt) : null,

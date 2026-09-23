@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { z } from 'zod'
 import type { AssetRecord } from '~~/shared/types/journal'
+import { ICON_MIME_TYPES, MAX_ICON_BYTES } from '~~/shared/constants'
 
 definePageMeta({ middleware: 'authenticated' })
 
 const { t } = useI18n()
+const format = useFormatters()
 const { message } = useApiError()
 
 useHead({ title: () => t('assets.title') })
@@ -14,7 +16,12 @@ const creating = ref(false)
 const editingId = ref<string | null>(null)
 const confirmId = ref<string | null>(null)
 const formError = ref('')
-const state = reactive({ symbol: '', name: '' })
+const state = reactive({
+  symbol: '',
+  name: '',
+  isActive: true,
+  icon: null as string | null,
+})
 
 const schema = computed(() => z.object({
   symbol: z.string().trim().min(1, t('validation.required')).max(12, t('validation.symbol')),
@@ -25,25 +32,61 @@ function startEdit(asset: AssetRecord) {
   editingId.value = asset.id
   state.symbol = asset.symbol
   state.name = asset.name
+  state.isActive = asset.isActive
+  state.icon = asset.icon
   formError.value = ''
 }
 
 function resetForm() {
   state.symbol = ''
   state.name = ''
+  state.isActive = true
+  state.icon = null
   editingId.value = null
   creating.value = false
+}
+
+function onIcon(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  if (!ICON_MIME_TYPES.includes(file.type as typeof ICON_MIME_TYPES[number])) {
+    formError.value = t('validation.invalid_icon')
+    return
+  }
+  if (file.size > MAX_ICON_BYTES) {
+    formError.value = t('validation.icon_too_large')
+    return
+  }
+  const reader = new FileReader()
+  reader.onload = () => {
+    const result = typeof reader.result === 'string' ? reader.result : ''
+    if (!result.startsWith('data:image/')) {
+      formError.value = t('validation.invalid_icon')
+      return
+    }
+    state.icon = result
+    formError.value = ''
+  }
+  reader.readAsDataURL(file)
 }
 
 async function onSubmit() {
   formError.value = ''
   creating.value = true
   try {
+    const body = {
+      symbol: state.symbol,
+      name: state.name,
+      isActive: state.isActive,
+      icon: state.icon,
+    }
     if (editingId.value) {
-      await $fetch(`/api/assets/${editingId.value}`, { method: 'PATCH', body: state })
+      await $fetch(`/api/assets/${editingId.value}`, { method: 'PATCH', body })
     }
     else {
-      await $fetch('/api/assets', { method: 'POST', body: state })
+      await $fetch('/api/assets', { method: 'POST', body })
     }
     resetForm()
     await refresh()
@@ -53,6 +96,17 @@ async function onSubmit() {
   }
   finally {
     creating.value = false
+  }
+}
+
+async function toggle(asset: AssetRecord) {
+  formError.value = ''
+  try {
+    await $fetch(`/api/assets/${asset.id}`, { method: 'PATCH', body: { isActive: !asset.isActive } })
+    await refresh()
+  }
+  catch (cause) {
+    formError.value = message(cause)
   }
 }
 
@@ -85,13 +139,23 @@ async function remove(id: string) {
       <div v-if="data?.length" class="mb-8">
         <article v-for="asset in data" :key="asset.id" class="border-b border-default py-4">
           <div class="flex items-start justify-between gap-4">
-            <div>
-              <p class="font-medium text-highlighted">{{ asset.symbol }}</p>
-              <p class="mt-1 text-sm text-muted">{{ asset.name }}</p>
-              <p class="mt-1 text-xs text-dimmed">{{ t('assets.tradeCount', { count: asset.tradeCount }) }}</p>
+            <div class="flex min-w-0 items-start gap-3">
+              <AssetMark :symbol="asset.symbol" :icon="asset.icon" />
+              <div class="min-w-0">
+                <p class="font-medium text-highlighted">{{ asset.symbol }}</p>
+                <p class="mt-1 text-sm text-muted">{{ asset.name }}</p>
+                <p class="mt-1 text-xs text-dimmed">
+                  {{ asset.isActive ? t('assets.active') : t('assets.inactive') }}
+                  · {{ t('assets.tradeCount', { count: asset.tradeCount }) }}
+                </p>
+                <p class="mt-1 text-xs text-dimmed">{{ t('assets.created', { date: format.date(asset.createdAt) }) }}</p>
+              </div>
             </div>
-            <div class="flex gap-3 text-xs">
+            <div class="flex shrink-0 flex-col items-end gap-2 text-xs">
               <button type="button" class="text-muted" @click="startEdit(asset)">{{ t('assets.edit') }}</button>
+              <button type="button" class="text-muted" @click="toggle(asset)">
+                {{ asset.isActive ? t('assets.markInactive') : t('assets.markActive') }}
+              </button>
               <button type="button" class="text-muted" @click="confirmId = asset.id">{{ t('assets.delete') }}</button>
             </div>
           </div>
@@ -105,12 +169,40 @@ async function remove(id: string) {
 
       <h2 class="text-sm text-muted">{{ editingId ? t('assets.edit') : t('assets.add') }}</h2>
       <UForm :schema="schema" :state="state" class="mt-4 space-y-4" @submit="onSubmit">
+        <div class="flex items-center gap-3">
+          <AssetMark :symbol="state.symbol || '·'" :icon="state.icon" />
+          <div class="flex flex-wrap items-center gap-3 text-sm">
+            <label class="cursor-pointer text-muted underline underline-offset-4">
+              {{ t('assets.chooseIcon') }}
+              <input type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" @change="onIcon">
+            </label>
+            <button v-if="state.icon" type="button" class="text-dimmed" @click="state.icon = null">
+              {{ t('assets.removeIcon') }}
+            </button>
+          </div>
+        </div>
+        <p class="text-xs text-dimmed">{{ t('assets.iconHint') }}</p>
+
         <UFormField :label="t('assets.symbol')" name="symbol" :hint="t('assets.symbolHint')" required>
           <UInput v-model="state.symbol" autocapitalize="characters" autocomplete="off" class="w-full" />
         </UFormField>
         <UFormField :label="t('assets.name')" name="name" :hint="t('assets.nameHint')" required>
           <UInput v-model="state.name" autocomplete="off" class="w-full" />
         </UFormField>
+
+        <div>
+          <p class="mb-2 text-sm text-muted">{{ t('assets.status') }}</p>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" class="choice" :aria-pressed="state.isActive" @click="state.isActive = true">
+              {{ t('assets.active') }}
+            </button>
+            <button type="button" class="choice" :aria-pressed="!state.isActive" @click="state.isActive = false">
+              {{ t('assets.inactive') }}
+            </button>
+          </div>
+          <p class="mt-2 text-xs text-dimmed">{{ t('assets.activeHint') }}</p>
+        </div>
+
         <p v-if="formError" class="text-sm text-loss" role="alert">{{ formError }}</p>
         <div class="flex gap-3">
           <UButton type="submit" color="neutral" :loading="creating">{{ t('assets.save') }}</UButton>

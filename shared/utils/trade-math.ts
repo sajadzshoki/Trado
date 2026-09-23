@@ -8,6 +8,54 @@ export interface MathEntry {
   totalToman: string
 }
 
+export type TradeStatus = 'open' | 'closed' | 'empty'
+
+export interface PositionEntry {
+  id: string
+  side: TradeSide
+  quantity: string
+}
+
+export type PositionChange
+  = | { op: 'add', side: TradeSide, quantity: string }
+    | { op: 'replace', id: string, side: TradeSide, quantity: string }
+    | { op: 'remove', id: string }
+
+/**
+ * Net quantity is total buy quantity minus total sell quantity.
+ * Open means some quantity remains. Closed means the net is exactly zero
+ * and the trade has entries. This does not match individual lots.
+ */
+export function tradeStatus(entryCount: number, buyQuantity: string, sellQuantity: string): TradeStatus {
+  if (entryCount === 0) return 'empty'
+  const net = new Decimal(buyQuantity).minus(sellQuantity)
+  if (net.gt(0)) return 'open'
+  if (net.eq(0)) return 'closed'
+  return 'open'
+}
+
+export function positionAfter(entries: PositionEntry[], change: PositionChange) {
+  let buy = ZERO
+  let sell = ZERO
+  for (const entry of entries) {
+    if (change.op !== 'add' && entry.id === change.id) continue
+    const quantity = new Decimal(entry.quantity)
+    if (entry.side === 'buy') buy = buy.plus(quantity)
+    else sell = sell.plus(quantity)
+  }
+  if (change.op !== 'remove') {
+    const quantity = new Decimal(change.quantity)
+    if (change.side === 'buy') buy = buy.plus(quantity)
+    else sell = sell.plus(quantity)
+  }
+  return {
+    buy,
+    sell,
+    net: buy.minus(sell),
+    exceeded: sell.gt(buy),
+  }
+}
+
 export interface TradeMath {
   buyQuantity: string
   sellQuantity: string

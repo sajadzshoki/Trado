@@ -46,6 +46,121 @@ export function quoteEntry(quantity: Decimal, unitPriceUsd: Decimal, usdTomanRat
   }
 }
 
+export const AMOUNT_FIELDS = ['quantity', 'unitPriceUsd', 'totalUsd'] as const
+export type AmountField = (typeof AMOUNT_FIELDS)[number]
+
+const MIN_TRANSACTION_MS = Date.parse('2000-01-01T00:00:00.000Z')
+const FUTURE_SKEW_MS = 15 * 60 * 1000
+
+export function transactionDateIssue(input: string, now = Date.now()) {
+  const date = new Date(input)
+  if (Number.isNaN(date.getTime())) return 'invalid_date' as const
+  if (date.getTime() < MIN_TRANSACTION_MS) return 'date_past' as const
+  if (date.getTime() > now + FUTURE_SKEW_MS) return 'date_future' as const
+  return null
+}
+
+/** The missing leg of quantity × unit price = total. Decimal, never binary float. */
+export function solveAmount(left: AmountField, leftValue: Decimal, right: AmountField, rightValue: Decimal) {
+  const known: Partial<Record<AmountField, Decimal>> = {
+    [left]: leftValue,
+    [right]: rightValue,
+  }
+  if (!known.totalUsd) return known.quantity!.mul(known.unitPriceUsd!)
+  if (!known.unitPriceUsd) return known.totalUsd.div(known.quantity!)
+  return known.totalUsd.div(known.unitPriceUsd!)
+}
+
+export function formatInputDecimal(value: Decimal, locale = 'en') {
+  const trimmed = trimDecimal(value.toFixed(12))
+  return locale.startsWith('fa') ? localizeDigits(trimmed, 'fa') : trimmed
+}
+
+export interface ResolvedAmounts {
+  quantity: string
+  unitPriceUsd: string
+  totalUsd: string
+  usdTomanRate: string
+  totalToman: string
+  solved: AmountField
+}
+
+/**
+ * Two source fields are trusted. The third is computed here and any client
+ * value for that field is ignored. Omitting solveFor keeps the older
+ * quantity × unit price → total behavior.
+ */
+export function resolveEntryAmounts(input: {
+  quantity?: string | null
+  unitPriceUsd?: string | null
+  totalUsd?: string | null
+  solveFor?: AmountField
+  usdTomanRate: string
+}): { ok: true, value: ResolvedAmounts } | { ok: false, field: string, code: 'invalid_number' | 'positive' | 'too_large' } {
+  const solved = input.solveFor ?? 'totalUsd'
+  const raw: Record<AmountField, string> = {
+    quantity: input.quantity?.trim() ?? '',
+    unitPriceUsd: input.unitPriceUsd?.trim() ?? '',
+    totalUsd: input.totalUsd?.trim() ?? '',
+  }
+  const parsedAll = {
+    quantity: parsePositiveDecimal(raw.quantity),
+    unitPriceUsd: parsePositiveDecimal(raw.unitPriceUsd),
+    totalUsd: parsePositiveDecimal(raw.totalUsd),
+  }
+  if (parsedAll.quantity.ok && parsedAll.unitPriceUsd.ok && parsedAll.totalUsd.ok) {
+    const quantity = parsedAll.quantity.value
+    const unitPriceUsd = parsedAll.unitPriceUsd.value
+    const totalUsd = parsedAll.totalUsd.value
+    const matches = quantity.mul(unitPriceUsd).toFixed(12) === totalUsd.toFixed(12)
+      || totalUsd.div(quantity).toFixed(12) === unitPriceUsd.toFixed(12)
+      || totalUsd.div(unitPriceUsd).toFixed(12) === quantity.toFixed(12)
+    if (matches) {
+      const rate = parsePositiveDecimal(input.usdTomanRate)
+      if (!rate.ok) return { ok: false, field: 'usdTomanRate', code: rate.code }
+      const stored = {
+        quantity: quantity.toFixed(12),
+        unitPriceUsd: unitPriceUsd.toFixed(12),
+        totalUsd: totalUsd.toFixed(12),
+        usdTomanRate: rate.value.toFixed(8),
+        totalToman: totalUsd.mul(rate.value).toFixed(4),
+      }
+      if (new Decimal(stored.totalToman).lte(0)) return { ok: false, field: 'usdTomanRate', code: 'positive' }
+      return { ok: true, value: { ...stored, solved } }
+    }
+  }
+  const known: Partial<Record<AmountField, Decimal>> = {}
+  for (const field of AMOUNT_FIELDS) {
+    if (field === solved) continue
+    const parsed = parsePositiveDecimal(raw[field])
+    if (!parsed.ok) return { ok: false, field, code: parsed.code }
+    known[field] = parsed.value
+  }
+  const sources = AMOUNT_FIELDS.filter(field => field !== solved)
+  const computed = solveAmount(sources[0]!, known[sources[0]!]!, sources[1]!, known[sources[1]!]!)
+  if (!computed.isFinite() || computed.lte(0)) return { ok: false, field: solved, code: 'positive' }
+  if (computed.gte('1e26')) return { ok: false, field: solved, code: 'too_large' }
+
+  const quantity = solved === 'quantity' ? computed : known.quantity!
+  const unitPriceUsd = solved === 'unitPriceUsd' ? computed : known.unitPriceUsd!
+  const totalUsd = solved === 'totalUsd' ? computed : known.totalUsd!
+  const rate = parsePositiveDecimal(input.usdTomanRate)
+  if (!rate.ok) return { ok: false, field: 'usdTomanRate', code: rate.code }
+
+  const totalToman = totalUsd.mul(rate.value)
+  const stored = {
+    quantity: quantity.toFixed(12),
+    unitPriceUsd: unitPriceUsd.toFixed(12),
+    totalUsd: totalUsd.toFixed(12),
+    usdTomanRate: rate.value.toFixed(8),
+    totalToman: totalToman.toFixed(4),
+  }
+  if (new Decimal(stored.quantity).lte(0) || new Decimal(stored.unitPriceUsd).lte(0) || new Decimal(stored.totalUsd).lte(0) || new Decimal(stored.totalToman).lte(0)) {
+    return { ok: false, field: solved, code: 'positive' }
+  }
+  return { ok: true, value: { ...stored, solved } }
+}
+
 function localizeDigits(value: string, locale: string) {
   if (!locale.startsWith('fa')) return value
   return value.replace(/\d/g, digit => PERSIAN_DIGITS[Number(digit)] ?? digit)

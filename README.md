@@ -41,7 +41,9 @@ A trade is a container you control. It can hold many buy and sell entries. The a
 
 Inside one trade, realized P/L uses average cost on the overlapping quantity only. If a trade sells more than it bought, the extra quantity is flagged instead of being matched to another trade.
 
-Each entry stores quantity, USD unit price, USD total, the USD/Toman rate at that moment, the Toman total, the date, and the side. Both currencies stay visible. Settings choose which one leads.
+Each entry stores the side, quantity, USD unit price, USD total, the USD/Toman rate at that moment, the Toman total, the date, and an optional note. The entry form accepts any two of quantity, unit price, and total, and calculates the third with decimal arithmetic. Both currencies stay visible. USD leads unless settings choose Toman.
+
+A trade is open while buy quantity exceeds sell quantity, and closed when those quantities are equal. A sell cannot exceed the quantity that trade currently holds. Buys and sells are still not matched lot by lot.
 
 Initial capital stores a USD amount, the rate on that day, and the Toman equivalent. Mark-to-market performance against that capital is not calculated, because live prices are not tracked.
 
@@ -98,7 +100,8 @@ API:
 
 - OTP send and verify
 - Changing a phone number
-- Live prices and performance against initial capital
+- Live prices. `assets.price_provider`, `assets.external_asset_id`, and `server/services/prices.ts` are the extension point. Nothing calls a market API
+- Performance against initial capital
 - Capital history
 - CSV export
 - Charts

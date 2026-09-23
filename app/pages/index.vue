@@ -116,7 +116,7 @@ const hasTrades = computed(() => (data.value?.tradeCount ?? 0) > 0)
               <p class="mt-1 truncate text-xs text-dimmed">
                 {{ trade.title || trade.asset.name }}
                 ·
-                {{ trade.isOversold ? t('trades.oversold') : trade.isFlat ? t('trades.flat') : t('trades.remaining', { qty: format.qty(trade.remainingQuantity) }) }}
+                {{ trade.isOversold ? t('trades.oversold') : trade.status === 'closed' ? t('trades.statusClosed') : trade.status === 'open' ? t('trades.statusOpen') : t('trades.noEntries') }}
               </p>
             </div>
             <MoneyText :usd="trade.realizedPnlUsd" :toman="trade.realizedPnlToman" signed size="sm" />

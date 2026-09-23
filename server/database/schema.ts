@@ -1,5 +1,5 @@
 import { relations, sql } from 'drizzle-orm'
-import { check, index, integer, numeric, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { boolean, check, index, integer, numeric, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 
 export const displayCurrencyEnum = pgEnum('display_currency', ['USD', 'TOMAN'])
 export const localeEnum = pgEnum('app_locale', ['en', 'fa'])
@@ -34,11 +34,19 @@ export const otpChallenges = pgTable('otp_challenges', {
   index('otp_challenges_phone_purpose_idx').on(table.phone, table.purpose),
 ])
 
+/**
+ * priceProvider and externalAssetId are reserved for a later quote source.
+ * No current route writes them. See server/services/prices.ts.
+ */
 export const assets = pgTable('assets', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   symbol: text('symbol').notNull(),
   name: text('name').notNull(),
+  iconData: text('icon_data'),
+  isActive: boolean('is_active').notNull().default(true),
+  priceProvider: text('price_provider'),
+  externalAssetId: text('external_asset_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, table => [

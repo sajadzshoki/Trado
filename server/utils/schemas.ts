@@ -25,15 +25,28 @@ export const settingsSchema = z.object({
   displayCurrency: z.enum(['USD', 'TOMAN']).optional(),
 })
 
+const iconField = z.string().max(150_000).nullable().optional()
+
 export const assetSchema = z.object({
   symbol: z.string().trim().min(1).max(12),
   name: z.string().trim().min(1).max(64),
+  isActive: z.boolean().optional(),
+  icon: iconField,
 })
+
+export const assetUpdateSchema = z.object({
+  symbol: z.string().trim().min(1).max(12).optional(),
+  name: z.string().trim().min(1).max(64).optional(),
+  isActive: z.boolean().optional(),
+  icon: iconField,
+}).refine(value => Object.keys(value).length > 0)
 
 export const entrySchema = z.object({
   side: z.enum(['buy', 'sell']),
-  quantity: z.string().trim().min(1).max(64),
-  unitPriceUsd: z.string().trim().min(1).max(64),
+  quantity: z.string().trim().max(64).optional().nullable(),
+  unitPriceUsd: z.string().trim().max(64).optional().nullable(),
+  totalUsd: z.string().trim().max(64).optional().nullable(),
+  solveFor: z.enum(['quantity', 'unitPriceUsd', 'totalUsd']).optional(),
   usdTomanRate: z.string().trim().min(1).max(64),
   transactedAt: z.string().trim().min(1).max(40),
   note: z.string().trim().max(MAX_ENTRY_NOTE_LENGTH).optional().nullable(),
