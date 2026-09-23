@@ -1,0 +1,167 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@theme {
+  --font-sans: "IBM Plex Sans", "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Vazirmatn", ui-monospace, monospace;
+  --color-brass-400: #c6a36a;
+  --color-brass-500: #b08d55;
+  --color-gain: #8fa888;
+  --color-loss: #c4928c;
+  --color-ink: #0e0f11;
+}
+
+:root,
+.dark {
+  color-scheme: dark;
+  --ui-bg: #0e0f11;
+  --ui-bg-muted: #131417;
+  --ui-bg-elevated: #18191d;
+  --ui-bg-accented: #222329;
+  --ui-bg-inverted: #f3f1ec;
+  --ui-border: rgba(243, 241, 236, 0.1);
+  --ui-border-muted: rgba(243, 241, 236, 0.06);
+  --ui-border-accented: rgba(243, 241, 236, 0.18);
+  --ui-border-inverted: #f3f1ec;
+  --ui-text: #e7e4de;
+  --ui-text-highlighted: #f6f4f0;
+  --ui-text-toned: #c8c4bc;
+  --ui-text-muted: #9b9892;
+  --ui-text-dimmed: #7a776f;
+  --ui-text-inverted: #141416;
+  --ui-primary: #e7e4de;
+  --ui-radius: 0.375rem;
+}
+
+html[dir="rtl"] {
+  --font-sans: "Vazirmatn", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Vazirmatn", "IBM Plex Mono", ui-monospace, monospace;
+}
+
+html,
+body,
+#__nuxt {
+  min-height: 100%;
+  background: #0e0f11;
+  color: #e7e4de;
+}
+
+body {
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(198, 163, 106, 0.35);
+  color: #f6f4f0;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2c2d32 transparent;
+}
+
+button,
+a,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+
+.kicker {
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ui-text-dimmed);
+}
+
+html[dir="rtl"] .kicker {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 0.78rem;
+}
+
+.app-main {
+  padding-bottom: calc(5.75rem + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 768px) {
+  .app-main {
+    padding-bottom: 3.5rem;
+  }
+}
+
+.choice {
+  min-height: 2.75rem;
+  border: 1px solid var(--ui-border);
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--ui-text-muted);
+  font-size: 0.95rem;
+}
+
+.choice[aria-pressed="true"] {
+  border-color: var(--ui-border-accented);
+  background: var(--ui-bg-elevated);
+  color: var(--ui-text-highlighted);
+}
+
+.choice[data-side="buy"][aria-pressed="true"] {
+  border-inline-start-color: #8fa888;
+  border-inline-start-width: 2px;
+}
+
+.choice[data-side="sell"][aria-pressed="true"] {
+  border-inline-start-color: #c4928c;
+  border-inline-start-width: 2px;
+}
+
+.rule {
+  border-top: 1px solid var(--ui-border);
+}
+
+.row-link {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--ui-border);
+  padding-block: 1rem;
+}
+
+.row-link:hover {
+  color: var(--ui-text-highlighted);
+}
+
+.text-gain {
+  color: var(--color-gain);
+}
+
+.text-loss {
+  color: var(--color-loss);
+}
+
+.bottom-nav {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  border-top: 1px solid var(--ui-border);
+  background: #0e0f11;
+  padding-bottom: env(safe-area-inset-bottom);
+}

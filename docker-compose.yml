@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: trado
+      POSTGRES_PASSWORD: trado
+      POSTGRES_DB: trado
+    ports:
+      - "5432:5432"
+    volumes:
+      - trado_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trado -d trado"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  trado_pg:
