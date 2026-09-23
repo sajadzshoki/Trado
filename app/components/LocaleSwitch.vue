@@ -1,17 +1,25 @@
 <script setup lang="ts">
 const { locale, setLocale } = useI18n()
 const { loggedIn, fetch: refreshSession } = useUserSession()
+const { message } = useApiError()
 const pending = ref(false)
+const error = ref('')
 
 async function choose(code: 'en' | 'fa') {
   if (code === locale.value || pending.value) return
+  const previous = locale.value
   pending.value = true
+  error.value = ''
   try {
     await setLocale(code)
     if (loggedIn.value) {
       await $fetch('/api/settings', { method: 'PATCH', body: { locale: code } })
       await refreshSession()
     }
+  }
+  catch (cause) {
+    error.value = message(cause)
+    if (locale.value !== previous) await setLocale(previous)
   }
   finally {
     pending.value = false
@@ -23,7 +31,7 @@ async function choose(code: 'en' | 'fa') {
   <div class="flex items-center gap-3 text-xs" role="group" :aria-label="$t('common.language')">
     <button
       type="button"
-      class="tracking-wide"
+      class="tap tracking-wide"
       :class="locale === 'en' ? 'text-highlighted' : 'text-dimmed'"
       :aria-pressed="locale === 'en'"
       @click="choose('en')"
@@ -33,6 +41,7 @@ async function choose(code: 'en' | 'fa') {
     <span class="text-dimmed" aria-hidden="true">/</span>
     <button
       type="button"
+      class="tap"
       :class="locale === 'fa' ? 'text-highlighted' : 'text-dimmed'"
       :aria-pressed="locale === 'fa'"
       @click="choose('fa')"
@@ -40,4 +49,5 @@ async function choose(code: 'en' | 'fa') {
       فا
     </button>
   </div>
+  <p v-if="error" class="mt-2 text-xs text-loss" role="alert">{{ error }}</p>
 </template>

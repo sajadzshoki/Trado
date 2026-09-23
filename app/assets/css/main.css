@@ -375,6 +375,27 @@ html[dir="rtl"] .kicker {
   }
 }
 
+.tap {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+}
+
+.nav-label {
+  display: block;
+  max-width: 4.8rem;
+  overflow-wrap: anywhere;
+  text-align: center;
+  line-height: 1.15;
+}
+
+input[type='date'],
+input[type='datetime-local'],
+input[type='time'] {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .bottom-nav {
   position: fixed;
   inset-inline: 0;

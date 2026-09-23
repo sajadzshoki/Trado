@@ -23,7 +23,7 @@ function active(item: { to: string, exact?: boolean }) {
 <template>
   <nav
     :class="props.orientation === 'horizontal' ? 'bottom-nav md:hidden' : 'flex flex-col gap-1'"
-    :aria-label="t('nav.dashboard')"
+    :aria-label="t('nav.label')"
   >
     <NuxtLink
       v-for="item in items"
@@ -78,7 +78,7 @@ function active(item: { to: string, exact?: boolean }) {
           <circle cx="8" cy="17" r="1.6" fill="#0e0f11" />
         </template>
       </svg>
-      <span :class="active(item) ? 'text-highlighted' : 'text-dimmed'">
+      <span class="nav-label" :class="active(item) ? 'text-highlighted' : 'text-dimmed'">
         {{ t(`nav.${item.key}`) }}
       </span>
       <span

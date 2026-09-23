@@ -17,6 +17,9 @@ const { data, pending, error, refresh } = await useFetch<AssetRecord[]>('/api/as
 const creating = ref(false)
 const editingId = ref<string | null>(null)
 const confirmId = ref<string | null>(null)
+const confirmClearId = ref<string | null>(null)
+const deletePending = ref(false)
+const formSaved = ref(false)
 const formError = ref('')
 const quotingId = ref<string | null>(null)
 const quotePending = ref(false)
@@ -39,6 +42,17 @@ const schema = computed(() => z.object({
   name: z.string().trim().min(1, t('validation.required')).max(64, t('validation.too_long')),
 }))
 
+function focusForm() {
+  nextTick(() => document.getElementById('asset-form')?.scrollIntoView({ block: 'start' }))
+}
+
+function startCreate() {
+  resetForm()
+  formSaved.value = false
+  formError.value = ''
+  focusForm()
+}
+
 function startEdit(asset: AssetRecord) {
   editingId.value = asset.id
   state.symbol = asset.symbol
@@ -46,7 +60,9 @@ function startEdit(asset: AssetRecord) {
   state.isActive = asset.isActive
   state.icon = asset.icon
   state.externalAssetId = asset.externalAssetId ?? ''
+  formSaved.value = false
   formError.value = ''
+  focusForm()
 }
 
 function resetForm() {
@@ -108,6 +124,7 @@ async function onSubmit() {
       await $fetch('/api/assets', { method: 'POST', body })
     }
     resetForm()
+    formSaved.value = true
     await refresh()
   }
   catch (cause) {
@@ -193,6 +210,7 @@ async function clearQuote(id: string) {
   try {
     await $fetch(`/api/assets/${id}/quote`, { method: 'DELETE' })
     quotingId.value = null
+    confirmClearId.value = null
     await refresh()
   }
   catch (cause) {
@@ -205,6 +223,7 @@ async function clearQuote(id: string) {
 
 async function remove(id: string) {
   formError.value = ''
+  deletePending.value = true
   try {
     await $fetch(`/api/assets/${id}`, { method: 'DELETE' })
     confirmId.value = null
@@ -213,12 +232,21 @@ async function remove(id: string) {
   catch (cause) {
     formError.value = message(cause)
   }
+  finally {
+    deletePending.value = false
+  }
 }
 </script>
 
 <template>
   <div>
-    <PageHeader :title="t('assets.title')" :subtitle="t('assets.subtitle')" />
+    <PageHeader :title="t('assets.title')" :subtitle="t('assets.subtitle')">
+      <template #actions>
+        <button type="button" class="tap text-sm text-highlighted" @click="startCreate">
+          {{ t('assets.add') }}
+        </button>
+      </template>
+    </PageHeader>
 
     <p v-if="pending && !data" class="text-sm text-dimmed">{{ t('common.loading') }}</p>
     <div v-else-if="error" class="space-y-3">
@@ -237,9 +265,9 @@ async function remove(id: string) {
               <div class="min-w-0">
                 <p class="font-medium text-highlighted">{{ asset.symbol }}</p>
                 <p class="mt-1 text-sm text-muted">{{ asset.name }}</p>
-                <p class="mt-1 text-xs text-dimmed">
-                  {{ asset.isActive ? t('assets.active') : t('assets.inactive') }}
-                  · {{ t('assets.tradeCount', { count: asset.tradeCount }) }}
+                <p class="mt-1 flex flex-wrap gap-x-2 text-xs text-dimmed">
+                  <span>{{ asset.isActive ? t('assets.active') : t('assets.inactive') }}</span>
+                  <span>{{ t('assets.tradeCount', { count: asset.tradeCount }) }}</span>
                 </p>
                 <p class="mt-1 text-xs text-dimmed">{{ t('assets.created', { date: format.date(asset.createdAt) }) }}</p>
                 <p v-if="asset.externalAssetId" class="mt-1 text-xs text-dimmed">
@@ -250,13 +278,13 @@ async function remove(id: string) {
                 </p>
               </div>
             </div>
-            <div class="flex shrink-0 flex-col items-end gap-2 text-xs">
-              <button type="button" class="text-muted" @click="startEdit(asset)">{{ t('assets.edit') }}</button>
-              <button type="button" class="text-muted" @click="toggle(asset)">
-                {{ asset.isActive ? t('assets.markInactive') : t('assets.markActive') }}
-              </button>
-              <button type="button" class="text-muted" @click="confirmId = asset.id">{{ t('assets.delete') }}</button>
-            </div>
+          </div>
+          <div class="mt-2 flex flex-wrap gap-1">
+            <button type="button" class="tap text-sm text-muted" @click="startEdit(asset)">{{ t('assets.edit') }}</button>
+            <button type="button" class="tap text-sm text-muted" @click="toggle(asset)">
+              {{ asset.isActive ? t('assets.markInactive') : t('assets.markActive') }}
+            </button>
+            <button type="button" class="tap text-sm text-muted" @click="confirmId = asset.id">{{ t('assets.delete') }}</button>
           </div>
           <div class="mt-4">
             <p class="text-xs text-dimmed">{{ t('assets.currentPrice') }}</p>
@@ -267,7 +295,7 @@ async function remove(id: string) {
               <p class="mt-1 text-xs text-dimmed">{{ t('assets.updated', { date: format.date(asset.quote.quotedAt) }) }}</p>
             </template>
             <p v-else class="mt-1 text-xs text-dimmed">{{ t('assets.noPrice') }}</p>
-            <button type="button" class="mt-2 text-xs text-muted" @click="startQuote(asset)">
+            <button type="button" class="tap text-sm text-muted" @click="startQuote(asset)">
               {{ asset.quote ? t('common.edit') : t('assets.savePrice') }}
             </button>
           </div>
@@ -293,20 +321,16 @@ async function remove(id: string) {
             <p v-if="quoteError" class="text-sm text-loss" role="alert">{{ quoteError }}</p>
             <div class="flex flex-wrap gap-3">
               <UButton type="submit" color="neutral" size="sm" :loading="quotePending">{{ t('assets.savePrice') }}</UButton>
-              <button v-if="asset.quote" type="button" class="text-sm text-muted" :disabled="quotePending" @click="clearQuote(asset.id)">
+              <button v-if="asset.quote" type="button" class="tap text-sm text-muted" :disabled="quotePending" @click="confirmClearId = asset.id">
                 {{ t('assets.clearPrice') }}
               </button>
             </div>
           </form>
-          <p v-if="confirmId === asset.id" class="mt-3 text-sm text-muted">
-            {{ t('assets.deleteConfirm') }}
-            <button type="button" class="ms-3 text-loss" @click="remove(asset.id)">{{ t('trades.confirmDelete') }}</button>
-            <button type="button" class="ms-3" @click="confirmId = null">{{ t('trades.cancel') }}</button>
-          </p>
         </article>
       </div>
 
-      <h2 class="text-sm text-muted">{{ editingId ? t('assets.edit') : t('assets.add') }}</h2>
+      <h2 id="asset-form" class="scroll-mt-24 text-sm text-muted">{{ editingId ? t('assets.edit') : t('assets.add') }}</h2>
+      <p v-if="formSaved" class="mt-3 text-sm text-muted" role="status">{{ t('common.saved') }}</p>
       <UForm :schema="schema" :state="state" class="mt-4 space-y-4" @submit="onSubmit">
         <div class="flex items-center gap-3">
           <AssetMark :symbol="state.symbol || '·'" :icon="state.icon" />
@@ -354,5 +378,24 @@ async function remove(id: string) {
         </div>
       </UForm>
     </template>
+
+    <ConfirmDialog
+      :open="confirmId != null"
+      :title="t('assets.delete')"
+      :body="t('assets.deleteConfirm')"
+      :confirm-label="t('trades.confirmDelete')"
+      :pending="deletePending"
+      @update:open="value => { if (!value) confirmId = null }"
+      @confirm="confirmId && remove(confirmId)"
+    />
+    <ConfirmDialog
+      :open="confirmClearId != null"
+      :title="t('assets.clearPrice')"
+      :body="t('assets.clearConfirm')"
+      :confirm-label="t('assets.clearPrice')"
+      :pending="quotePending"
+      @update:open="value => { if (!value) confirmClearId = null }"
+      @confirm="confirmClearId && clearQuote(confirmClearId)"
+    />
   </div>
 </template>

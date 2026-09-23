@@ -118,6 +118,7 @@ const filtered = computed(() => {
 const filtersActive = computed(() => Boolean(
   queryText.value.trim() || assetId.value || side.value !== 'all' || status.value !== 'all' || from.value || to.value || sort.value !== 'newest',
 ))
+const showFilters = ref(filtersActive.value)
 
 function clearFilters() {
   queryText.value = ''
@@ -144,7 +145,10 @@ function clearFilters() {
     </EmptyState>
 
     <template v-else-if="data">
-      <form class="grid gap-3 sm:grid-cols-2" @submit.prevent>
+      <button type="button" class="tap mb-1 text-sm text-muted sm:hidden" :aria-expanded="showFilters" @click="showFilters = !showFilters">
+        {{ showFilters ? t('trades.hideFilters') : t('trades.showFilters') }}
+      </button>
+      <form class="grid gap-3 sm:grid-cols-2" :class="showFilters ? '' : 'max-sm:hidden'" @submit.prevent>
         <label class="block text-sm sm:col-span-2">
           <span class="mb-2 block text-muted">{{ t('trades.search') }}</span>
           <UInput id="trade-search" v-model="queryText" type="search" :placeholder="t('trades.searchPlaceholder')" class="w-full" />

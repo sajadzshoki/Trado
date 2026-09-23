@@ -48,6 +48,8 @@ watch(data, (trade) => {
 }, { immediate: true })
 
 const editing = computed(() => data.value?.entries.find(entry => entry.id === editingId.value) ?? null)
+const timeline = computed(() => data.value?.entries ?? [])
+const entrySaved = ref(false)
 const assetIcon = computed(() => assets.value?.find(asset => asset.id === data.value?.asset.id)?.icon ?? null)
 
 const assetOptions = computed(() => {
@@ -106,6 +108,7 @@ function openAdd(side: TradeSide) {
   editingId.value = null
   showAdd.value = true
   formError.value = ''
+  entrySaved.value = false
 }
 
 function addEntry(entry: EntryPayload) {
@@ -117,6 +120,7 @@ function addEntry(entry: EntryPayload) {
     await $fetch(`/api/trades/${tradeId.value}/entries`, { method: 'POST', body: entry })
     resetToken.value += 1
     showAdd.value = true
+    entrySaved.value = true
   })
 }
 
@@ -188,7 +192,7 @@ async function deleteTrade() {
           <h1 class="mt-2 text-[1.7rem] font-medium tracking-tight text-highlighted">
             {{ data.title || data.asset.symbol }}
           </h1>
-          <p class="mt-2 text-sm text-muted">{{ data.asset.name }} · {{ data.asset.symbol }}</p>
+          <p class="mt-2 text-sm text-muted">{{ data.asset.name }} <bdi class="num">{{ data.asset.symbol }}</bdi></p>
         </div>
       </header>
 
@@ -262,6 +266,7 @@ async function deleteTrade() {
 
       <section class="mt-10">
         <h2 class="text-sm text-muted">{{ t('trades.timeline') }}</h2>
+        <p v-if="entrySaved" class="mt-3 text-sm text-muted" role="status">{{ t('common.saved') }}</p>
         <div class="mt-3 grid grid-cols-2 gap-2">
           <button type="button" class="choice" data-side="buy" :aria-pressed="showAdd && addSide === 'buy' && !editingId" @click="openAdd('buy')">
             {{ t('trades.addBuy') }}
@@ -292,7 +297,7 @@ async function deleteTrade() {
               <p class="text-sm font-medium" :class="entry.side === 'buy' ? 'text-gain' : 'text-loss'">
                 {{ entry.side === 'buy' ? t('trades.buy') : t('trades.sell') }}
               </p>
-              <p class="num mt-1 text-sm">{{ format.qty(entry.quantity) }} {{ data.asset.symbol }}</p>
+              <p class="mt-1 text-sm"><bdi class="num">{{ format.qty(entry.quantity) }}</bdi> <bdi>{{ data.asset.symbol }}</bdi></p>
               <p class="num mt-1 text-xs text-dimmed">{{ t('trades.unitPriceShort') }} {{ format.usd(entry.unitPriceUsd) }}</p>
               <p class="num mt-1 text-xs text-dimmed">{{ format.dateTime(entry.transactedAt) }}</p>
               <p v-if="entry.note" class="mt-2 text-sm text-muted">{{ entry.note }}</p>
@@ -302,11 +307,11 @@ async function deleteTrade() {
               <bdi class="num mt-1 block text-xs text-muted">{{ format.toman(entry.totalToman) }}</bdi>
             </div>
           </div>
-          <div class="mt-3 flex gap-4 text-xs">
-            <button type="button" class="text-muted" @click="editingId = editingId === entry.id ? null : entry.id; showAdd = false">
+          <div class="mt-1 flex flex-wrap gap-1">
+            <button type="button" class="tap text-sm text-muted" @click="editingId = editingId === entry.id ? null : entry.id; showAdd = false; entrySaved = false">
               {{ t('common.edit') }}
             </button>
-            <button type="button" class="text-muted" @click="confirmDeleteEntry = entry.id">
+            <button type="button" class="tap text-sm text-muted" @click="confirmDeleteEntry = entry.id">
               {{ t('trades.deleteEntry') }}
             </button>
           </div>
@@ -347,7 +352,7 @@ async function deleteTrade() {
       </section>
 
       <section class="mt-12 border-t border-default pt-6">
-        <button type="button" class="text-sm text-loss" @click="confirmDeleteTrade = true">
+        <button type="button" class="tap text-sm text-loss" @click="confirmDeleteTrade = true">
           {{ t('trades.deleteTrade') }}
         </button>
       </section>

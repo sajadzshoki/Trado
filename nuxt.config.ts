@@ -66,6 +66,8 @@ export default defineNuxtConfig({
       '/**': {
         headers: {
           'content-security-policy': 'frame-ancestors *',
+          'x-content-type-options': 'nosniff',
+          'referrer-policy': 'strict-origin-when-cross-origin',
         },
       },
     },

@@ -9,7 +9,8 @@
     "trades": "Trades",
     "assets": "Assets",
     "settings": "Settings",
-    "record": "Record"
+    "record": "Record",
+    "label": "Main"
   },
   "auth": {
     "loginTitle": "Log in",
@@ -190,7 +191,9 @@
     "timeline": "Timeline",
     "boughtStory": "Bought",
     "soldStory": "Sold",
-    "remainsStory": "Remaining"
+    "remainsStory": "Remaining",
+    "showFilters": "Filters",
+    "hideFilters": "Hide filters"
   },
   "assets": {
     "title": "Assets",
@@ -233,7 +236,8 @@
     "externalId": "Market id",
     "externalIdHint": "Optional. A later price source can use this id. The journal works without it.",
     "externalIdValue": "Market id: {id}",
-    "linkedProvider": "Price source: {id}"
+    "linkedProvider": "Price source: {id}",
+    "clearConfirm": "Remove this current price? Past entries stay as they are."
   },
   "settings": {
     "title": "Settings",
@@ -314,6 +318,7 @@
     "edit": "Edit",
     "delete": "Delete",
     "back": "Back",
-    "language": "Language"
+    "language": "Language",
+    "saved": "Saved."
   }
 }

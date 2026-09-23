@@ -9,7 +9,8 @@
     "trades": "معاملات",
     "assets": "دارایی‌ها",
     "settings": "تنظیمات",
-    "record": "ثبت"
+    "record": "ثبت",
+    "label": "منوی اصلی"
   },
   "auth": {
     "loginTitle": "ورود",
@@ -190,7 +191,9 @@
     "timeline": "خط زمان",
     "boughtStory": "خریده‌شده",
     "soldStory": "فروخته‌شده",
-    "remainsStory": "باقی‌مانده"
+    "remainsStory": "باقی‌مانده",
+    "showFilters": "فیلترها",
+    "hideFilters": "بستن فیلترها"
   },
   "assets": {
     "title": "دارایی‌ها",
@@ -233,7 +236,8 @@
     "externalId": "شناسه بازار",
     "externalIdHint": "اختیاری. یک منبع قیمت بعدی می‌تواند از این شناسه استفاده کند. دفتر بدون آن هم کار می‌کند.",
     "externalIdValue": "شناسه بازار: {id}",
-    "linkedProvider": "منبع قیمت: {id}"
+    "linkedProvider": "منبع قیمت: {id}",
+    "clearConfirm": "این قیمت فعلی حذف شود؟ ثبت‌های قبلی همان‌طور می‌مانند."
   },
   "settings": {
     "title": "تنظیمات",
@@ -314,6 +318,7 @@
     "edit": "ویرایش",
     "delete": "حذف",
     "back": "بازگشت",
-    "language": "زبان"
+    "language": "زبان",
+    "saved": "ذخیره شد."
   }
 }

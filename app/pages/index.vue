@@ -63,7 +63,11 @@ function signedQty(side: 'buy' | 'sell', quantity: string) {
         class="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-default text-sm text-muted"
         :aria-label="t('nav.settings')"
       >
-        <span aria-hidden="true">{{ (user?.displayName || user?.phone || '·').slice(0, 1) }}</span>
+        <span v-if="user?.displayName?.trim()" aria-hidden="true">{{ user.displayName.trim().slice(0, 1) }}</span>
+        <svg v-else viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+          <circle cx="12" cy="8" r="3" />
+          <path d="M5.5 19.2c1.4-2.4 3.6-3.5 6.5-3.5s5.1 1.1 6.5 3.5" />
+        </svg>
       </NuxtLink>
     </header>
 

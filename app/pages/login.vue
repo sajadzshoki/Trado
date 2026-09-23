@@ -8,10 +8,10 @@ definePageMeta({
   middleware: 'guest-only',
 })
 
-const { t } = useI18n()
+const { t, locale, setLocale } = useI18n()
 const localePath = useLocalePath()
 const route = useRoute()
-const { fetch: refreshSession } = useUserSession()
+const { user, fetch: refreshSession } = useUserSession()
 const { message } = useApiError()
 
 useHead({ title: () => t('auth.loginTitle') })

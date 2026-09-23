@@ -11,6 +11,7 @@ defineProps<{
 const emit = defineEmits<{ confirm: [] }>()
 const { t } = useI18n()
 const dialog = ref<HTMLDialogElement | null>(null)
+const titleId = useId()
 
 watch(open, async (value) => {
   await nextTick()
@@ -26,14 +27,14 @@ function onClose() {
 </script>
 
 <template>
-  <dialog ref="dialog" class="confirm-dialog" @close="onClose">
-    <h2 class="text-base font-medium text-highlighted">{{ title }}</h2>
+  <dialog ref="dialog" class="confirm-dialog" :aria-labelledby="titleId" @close="onClose">
+    <h2 :id="titleId" class="text-base font-medium text-highlighted">{{ title }}</h2>
     <p class="mt-2 text-sm leading-6 text-muted">{{ body }}</p>
-    <div class="mt-5 flex justify-end gap-3">
-      <button type="button" class="text-sm text-muted" :disabled="pending" @click="open = false">
+    <div class="mt-5 flex justify-end gap-2">
+      <button type="button" class="tap px-2 text-sm text-muted" :disabled="pending" autofocus @click="open = false">
         {{ t('common.cancel') }}
       </button>
-      <button type="button" class="text-sm text-loss" :disabled="pending" @click="emit('confirm')">
+      <button type="button" class="tap px-2 text-sm text-loss" :disabled="pending" @click="emit('confirm')">
         {{ confirmLabel }}
       </button>
     </div>

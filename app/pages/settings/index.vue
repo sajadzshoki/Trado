@@ -16,6 +16,7 @@ useHead({ title: () => t('settings.title') })
 
 const { data: capitalData, refresh: refreshCapital } = await useFetch<{ capital: CapitalRecord | null }>('/api/capital')
 
+const preferenceError = ref('')
 const profileError = ref('')
 const profileSaved = ref(false)
 const profilePending = ref(false)
@@ -104,8 +105,14 @@ async function saveProfile() {
 
 async function saveCurrency(displayCurrency: 'USD' | 'TOMAN') {
   if (user.value?.displayCurrency === displayCurrency) return
-  await $fetch('/api/settings', { method: 'PATCH', body: { displayCurrency } })
-  await refreshSession()
+  preferenceError.value = ''
+  try {
+    await $fetch('/api/settings', { method: 'PATCH', body: { displayCurrency } })
+    await refreshSession()
+  }
+  catch (cause) {
+    preferenceError.value = message(cause)
+  }
 }
 
 async function saveCapital() {
@@ -227,6 +234,7 @@ async function logout() {
           {{ t('money.toman') }}
         </button>
       </div>
+      <p v-if="preferenceError" class="mt-3 text-sm text-loss" role="alert">{{ preferenceError }}</p>
     </section>
 
     <section class="border-b border-default py-8">

@@ -120,4 +120,4 @@ A later provider can register with `registerPriceProvider` and `registerAssetPro
 - Changing a phone number
 - A connected market provider. The interface is in place. No external API is called
 - Capital history
-- CSV export
+- Excel and PDF export

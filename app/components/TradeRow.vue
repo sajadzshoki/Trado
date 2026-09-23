@@ -23,10 +23,10 @@ const status = computed(() => {
       </p>
       <span class="shrink-0 text-xs text-dimmed">{{ status }}</span>
     </div>
-    <p v-if="!trade.isEmpty" class="num mt-2 text-xs text-dimmed">
-      {{ t('trades.boughtQty') }} {{ format.qty(trade.buyQuantity) }}
-      · {{ t('trades.soldQty') }} {{ format.qty(trade.sellQuantity) }}
-      · {{ t('trades.remainingQty') }} {{ format.qty(trade.remainingQuantity) }}
+    <p v-if="!trade.isEmpty" class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-dimmed">
+      <span>{{ t('trades.boughtQty') }} <bdi class="num">{{ format.qty(trade.buyQuantity) }}</bdi></span>
+      <span>{{ t('trades.soldQty') }} <bdi class="num">{{ format.qty(trade.sellQuantity) }}</bdi></span>
+      <span>{{ t('trades.remainingQty') }} <bdi class="num">{{ format.qty(trade.remainingQuantity) }}</bdi></span>
     </p>
     <p v-if="trade.averageBuyUsd" class="num mt-1 text-xs text-dimmed">
       {{ t('trades.avgBuy') }} {{ format.usd(trade.averageBuyUsd) }}
