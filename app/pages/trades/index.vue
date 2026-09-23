@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TradeSummary } from '~~/shared/types/journal'
-import { Decimal } from '~~/shared/utils/numbers'
+import { filterTrades } from '~~/shared/utils/trade-filters'
 
 definePageMeta({ middleware: 'authenticated' })
 
@@ -76,44 +76,16 @@ const assets = computed(() => {
   return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]))
 })
 
-function dayKey(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
-
-function when(trade: TradeSummary) {
-  return new Date(trade.lastTransactedAt ?? trade.updatedAt).getTime()
-}
-
-function pnl(trade: TradeSummary) {
-  return new Decimal(trade.totalPnlUsd ?? trade.realizedPnlUsd)
-}
-
-const filtered = computed(() => {
-  const needle = queryText.value.trim().toLowerCase()
-  const rows = (data.value ?? []).filter((trade) => {
-    if (assetId.value && trade.asset.id !== assetId.value) return false
-    if (side.value === 'buy' && !trade.hasBuy) return false
-    if (side.value === 'sell' && !trade.hasSell) return false
-    if (status.value === 'open' && trade.status !== 'open') return false
-    if (status.value === 'closed' && trade.status !== 'closed') return false
-    const day = trade.lastTransactedAt ? dayKey(trade.lastTransactedAt) : ''
-    if ((from.value || to.value) && !day) return false
-    if (from.value && day < from.value) return false
-    if (to.value && day > to.value) return false
-    if (!needle) return true
-    const title = (trade.title ?? '').toLowerCase()
-    return trade.asset.symbol.toLowerCase().includes(needle) || title.includes(needle)
-  })
-  const copy = rows.slice()
-  if (sort.value === 'oldest') copy.sort((a, b) => when(a) - when(b))
-  else if (sort.value === 'highest') copy.sort((a, b) => pnl(b).comparedTo(pnl(a)))
-  else if (sort.value === 'lowest') copy.sort((a, b) => pnl(a).comparedTo(pnl(b)))
-  else copy.sort((a, b) => when(b) - when(a))
-  return copy
-})
+const filtered = computed(() => filterTrades(data.value ?? [], {
+  asset: assetId.value,
+  side: side.value,
+  status: status.value,
+  from: from.value,
+  to: to.value,
+  search: queryText.value,
+  sort: sort.value,
+  tzOffsetMinutes: new Date().getTimezoneOffset(),
+}))
 
 const filtersActive = computed(() => Boolean(
   queryText.value.trim() || assetId.value || side.value !== 'all' || status.value !== 'all' || from.value || to.value || sort.value !== 'newest',
@@ -133,7 +105,19 @@ function clearFilters() {
 
 <template>
   <div>
-    <PageHeader :title="t('trades.title')" :subtitle="t('trades.subtitle')" />
+    <PageHeader :title="t('trades.title')" :subtitle="t('trades.subtitle')">
+      <template #actions>
+        <TradeExport
+          :asset="assetId"
+          :side="side"
+          :status="status"
+          :from="from"
+          :to="to"
+          :search="queryText"
+          :sort="sort"
+        />
+      </template>
+    </PageHeader>
 
     <p v-if="pending && !data" class="text-sm text-dimmed" role="status">{{ t('common.loading') }}</p>
     <div v-else-if="error" class="space-y-3">

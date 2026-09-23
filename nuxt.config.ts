@@ -62,6 +62,12 @@ export default defineNuxtConfig({
     databaseUrl: process.env.DATABASE_URL || '',
   },
   nitro: {
+    serverAssets: [
+      {
+        baseName: 'fonts',
+        dir: './server/assets/fonts',
+      },
+    ],
     routeRules: {
       '/**': {
         headers: {

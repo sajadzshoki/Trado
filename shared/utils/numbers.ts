@@ -251,20 +251,22 @@ function signPrefix(dec: Decimal) {
   return ''
 }
 
-export function formatDateTime(value: string, locale: string) {
+export function formatDateTime(value: string, locale: string, timeZone?: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
   return new Intl.DateTimeFormat(locale.startsWith('fa') ? 'fa-IR' : 'en-US', {
     dateStyle: 'medium',
     timeStyle: 'short',
+    ...(timeZone ? { timeZone } : {}),
   }).format(date)
 }
 
-export function formatDate(value: string, locale: string) {
+export function formatDate(value: string, locale: string, timeZone?: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
   return new Intl.DateTimeFormat(locale.startsWith('fa') ? 'fa-IR' : 'en-US', {
     dateStyle: 'medium',
+    ...(timeZone ? { timeZone } : {}),
   }).format(date)
 }
 

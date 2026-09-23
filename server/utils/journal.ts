@@ -302,6 +302,22 @@ export async function listTrades(event: H3Event) {
     .map(row => presentTrade(row, false, quotes.get(row.assetId) ?? null))
 }
 
+/** Session user only. A client cannot choose another user's journal. */
+export async function listTradesForExport(event: H3Event) {
+  const userId = await requireUserId(event)
+  const db = useDb()
+  const rows = await db.query.trades.findMany({
+    where: eq(trades.userId, userId),
+    with: { asset: true, entries: true },
+    orderBy: [desc(trades.updatedAt)],
+  })
+  const quoteRows = await db.query.assetQuotes.findMany({ where: eq(assetQuotes.userId, userId) })
+  const quotes = new Map(quoteRows.map(quote => [quote.assetId, quote]))
+  return rows
+    .filter(row => row.asset)
+    .map(row => presentTrade(row, true, quotes.get(row.assetId) ?? null))
+}
+
 export async function createTrade(event: H3Event, input: {
   assetId: string
   title?: string | null

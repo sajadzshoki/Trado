@@ -97,6 +97,7 @@ API:
 - `PUT /api/assets/:id/quote`
 - `DELETE /api/assets/:id/quote`
 - `GET /api/trades`
+- `GET /api/trades/export`
 - `POST /api/trades`
 - `GET /api/trades/:id`
 - `PATCH /api/trades/:id`
@@ -114,10 +115,15 @@ User assets stay separate from any market catalog. An asset may store an optiona
 
 A later provider can register with `registerPriceProvider` and `registerAssetProvider`, then upsert the same quote row. `linkedPriceProvider` returns null until that provider is registered. Nothing in the app calls an external market API.
 
+## Export
+
+`GET /api/trades/export` returns the signed-in user's journal. It does not accept a `userId`. Filters match the Trades page: `asset` (id or symbol), `type` or `side`, `status`, `from`, `to`, and `q` or `search`. `tz` is the browser's `getTimezoneOffset()` so date filters use the same calendar day as the page.
+
+Excel is a real `.xlsx` workbook. The PDF embeds Vazir (SIL Open Font License, `server/assets/fonts/OFL.txt`) and shapes Persian so letters stay joined. English stays left to right. Summary profit and loss is the sum of the figures already calculated for those trades. A missing price stays blank.
+
 ## Not built yet
 
 - OTP send and verify
 - Changing a phone number
 - A connected market provider. The interface is in place. No external API is called
 - Capital history
-- Excel and PDF export

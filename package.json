@@ -23,10 +23,14 @@
     "@iconify-json/lucide": "^1.2.136",
     "@nuxt/ui": "^4.11.2",
     "@nuxtjs/i18n": "^10.6.0",
+    "bidi-js": "^1.1.0",
     "decimal.js": "^10.6.0",
     "drizzle-orm": "^0.45.3",
+    "exceljs": "^4.4.0",
+    "fontkit": "^2.0.4",
     "nuxt": "^4.5.2",
     "nuxt-auth-utils": "^0.5.30",
+    "pdfkit": "^0.20.2",
     "pg": "^8.23.0",
     "tailwindcss": "^4.3.3",
     "vue": "^3.5.43",
@@ -37,6 +41,7 @@
     "@types/node": "^22.19.0",
     "@types/pg": "^8.15.6",
     "drizzle-kit": "^0.31.11",
+    "mupdf": "^1.28.1",
     "typescript": "^5.9.3"
   }
 }
