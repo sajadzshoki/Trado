@@ -60,6 +60,14 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     databaseUrl: process.env.DATABASE_URL || '',
+    // h3 defaults session cookies to Secure=true; keep false unless request is HTTPS
+    // (see server/utils/session-cookie.ts for per-request override on login/logout).
+    session: {
+      cookie: {
+        sameSite: 'lax',
+        secure: false,
+      },
+    },
   },
   nitro: {
     serverAssets: [

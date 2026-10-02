@@ -10,6 +10,7 @@ import { hashUserPassword, verifyUserPassword, verifyUserPasswordOrDummy } from 
 import { getPriceProvider, MANUAL_PROVIDER_ID, quoteWriteFromProvider } from '../services/market'
 import { optionalText, parseEntry, parseExternalAssetId, parseIcon, parseTransactionDate, requireName, requirePhone, requireSymbol } from './parse'
 import { presentAsset, presentCapital, presentDashboard, presentTrade, presentUser } from './present'
+import { sessionCookieOpts } from './session-cookie'
 
 type PublicSessionUser = {
   id: string
@@ -30,7 +31,7 @@ async function sessionFor(event: H3Event, user: typeof users.$inferSelect, logge
   await setUserSession(event, {
     user: publicUser,
     loggedInAt,
-  })
+  }, sessionCookieOpts(event))
   return presentUser(user)
 }
 
